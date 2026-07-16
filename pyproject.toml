@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "traffic-ai"
+version = "0.1.0"
+description = "AI Traffic Signal — detection, tracking, signal optimization, violations, challan"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+traffic-pipeline = "traffic_ai.ai.pipeline:main"
+
+[tool.setuptools.packages.find]
+include = ["traffic_ai*"]

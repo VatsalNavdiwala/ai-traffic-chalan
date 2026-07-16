@@ -1,0 +1,61 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: traffic
+      POSTGRES_PASSWORD: traffic
+      POSTGRES_DB: traffic_ai
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  api:
+    build: .
+    command: uvicorn traffic_ai.api.main:app --host 0.0.0.0 --port 8000
+    env_file:
+      - .env.example
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    volumes:
+      - ./traffic_ai:/app/traffic_ai
+      - ./traffic_ai/models/weights:/app/traffic_ai/models/weights
+
+  worker:
+    build: .
+    command: celery -A traffic_ai.workers.celery_app.celery_app worker --loglevel=info
+    env_file:
+      - .env.example
+    depends_on:
+      - rabbitmq
+      - redis
+      - postgres
+    volumes:
+      - ./traffic_ai:/app/traffic_ai
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+
+volumes:
+  pgdata:

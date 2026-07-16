@@ -1,0 +1,38 @@
+# Vehicle / road-user classes for detection (map to YOLO class ids after training)
+vehicle_classes:
+  car: 0
+  bike: 1
+  truck: 2
+  bus: 3
+  auto: 4
+  emergency_vehicle: 5
+  bicycle: 6
+
+# Minimum confidence (Phase 1 target: 95%+)
+default_confidence: 0.95
+
+# Violation types supported in Phase 5
+violation_types:
+  - red_light_jump
+  - wrong_side
+  - no_helmet
+  - seat_belt
+  - mobile_phone
+  - triple_riding
+  - lane_crossing
+  - illegal_parking
+  - stop_line_crossing
+  - overspeed
+
+# Default fine amounts (INR) — configure per jurisdiction
+fines:
+  red_light_jump: 1000
+  wrong_side: 500
+  no_helmet: 1000
+  seat_belt: 1000
+  mobile_phone: 1000
+  triple_riding: 1000
+  lane_crossing: 500
+  illegal_parking: 500
+  stop_line_crossing: 500
+  overspeed: 1000
