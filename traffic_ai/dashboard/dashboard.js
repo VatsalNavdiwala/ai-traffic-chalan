@@ -34,7 +34,15 @@ function setupUpload() {
 
   const useFile = (file) => {
     if (!file) return;
-    label.textContent = file.name;
+    const maxBytes = 1024 * 1024 * 1024; // 1 GB
+    if (file.size > maxBytes) {
+      label.textContent = "File too large (max 1 GB)";
+      input.value = "";
+      preview.classList.add("hidden");
+      preview.removeAttribute("src");
+      return;
+    }
+    label.textContent = `${file.name} (${(file.size / (1024 * 1024)).toFixed(1)} MB)`;
     preview.src = URL.createObjectURL(file);
     preview.classList.remove("hidden");
   };

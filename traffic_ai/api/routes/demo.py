@@ -75,8 +75,8 @@ async def analyze_traffic_video(
     raw = await video.read()
     if not raw:
         raise HTTPException(400, "Empty upload")
-    if len(raw) > 80 * 1024 * 1024:
-        raise HTTPException(400, "Video too large (max 80 MB)")
+    if len(raw) > 1024 * 1024 * 1024:
+        raise HTTPException(400, "Video too large (max 1 GB)")
 
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
     try:
