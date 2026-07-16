@@ -6,9 +6,8 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from traffic_ai import __version__
-from traffic_ai.api.routes import demo, health, ops, signal
+from traffic_ai.api.routes import demo, health, signal
 from traffic_ai.config.settings import get_settings
-from traffic_ai.database import init_db
 from traffic_ai.utils.logger import setup_logging
 
 DASHBOARD_DIR = Path(__file__).resolve().parents[1] / "dashboard"
@@ -34,8 +33,14 @@ def create_app() -> FastAPI:
     )
     app.include_router(health.router)
     app.include_router(signal.router)
-    app.include_router(ops.router)
     app.include_router(demo.router)
+
+    try:
+        from traffic_ai.api.routes import ops
+
+        app.include_router(ops.router)
+    except Exception:
+        pass
 
     if DASHBOARD_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(DASHBOARD_DIR)), name="static")
@@ -47,6 +52,8 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     async def _startup() -> None:
         try:
+            from traffic_ai.database import init_db
+
             await init_db()
         except Exception:
             pass
