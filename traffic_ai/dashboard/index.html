@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AI Traffic Signal</title>
+  <title>AI Traffic Challan Demo</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/dashboard.css" />
 </head>
 <body>
@@ -16,99 +16,53 @@
       <span class="brand-mark"></span>
       <div>
         <h1>AI Traffic Signal</h1>
-        <p class="tagline">Live timing · violation demo · challan preview</p>
+        <p class="tagline">Upload road video → detect → plate → speed → challan</p>
       </div>
     </div>
     <div class="status-pill" id="apiStatus">Connecting…</div>
   </header>
 
-  <main class="layout">
-    <section class="panel controls">
-      <h2>Approach queues</h2>
-      <p class="hint">Set waiting vehicles — AI decides green time.</p>
+  <main class="layout demo-layout">
+    <section class="panel upload-panel">
+      <h2>1. Upload traffic video</h2>
+      <p class="hint">MP4/AVI/MOV. AI detects vehicles, reads plate, estimates speed, issues challan if over limit.</p>
+
+      <label class="drop" id="dropZone">
+        <input id="videoFile" type="file" accept="video/*" hidden />
+        <span id="dropLabel">Drop video here or click to browse</span>
+      </label>
+      <video id="preview" class="preview hidden" controls muted></video>
 
       <div class="grid-inputs">
-        <label>North <input id="north" type="number" min="0" value="45" /></label>
-        <label>South <input id="south" type="number" min="0" value="10" /></label>
-        <label>East <input id="east" type="number" min="0" value="6" /></label>
-        <label>West <input id="west" type="number" min="0" value="18" /></label>
+        <label>Location <input id="location" value="Ring Road Junction" /></label>
+        <label>Speed limit (km/h) <input id="speedLimit" type="number" min="10" value="60" /></label>
       </div>
+      <label class="check"><input id="runOcr" type="checkbox" checked /> Read number plate (OCR)</label>
 
-      <label class="check">
-        <input id="rushHour" type="checkbox" /> Rush hour boost
-      </label>
-
-      <label>
-        Emergency override
-        <select id="emergency">
-          <option value="">None</option>
-          <option value="north">North</option>
-          <option value="south">South</option>
-          <option value="east">East</option>
-          <option value="west">West</option>
-        </select>
-      </label>
-
-      <div class="btn-row">
-        <button id="runBtn" type="button">Run Signal AI</button>
-        <button id="demoBtn" type="button" class="ghost">Load demo traffic</button>
-      </div>
+      <button id="analyzeBtn" type="button">Analyze video</button>
+      <p class="hint" id="progress">Ready.</p>
     </section>
 
-    <section class="panel intersection">
-      <h2>Intersection</h2>
-      <div class="cross" id="cross">
-        <div class="arm north" data-dir="north">
-          <span class="dir">N</span>
-          <span class="light"></span>
-          <span class="meta"><b id="nCount">—</b> veh · <b id="nGreen">—</b>s</span>
-        </div>
-        <div class="arm west" data-dir="west">
-          <span class="dir">W</span>
-          <span class="light"></span>
-          <span class="meta"><b id="wCount">—</b> veh · <b id="wGreen">—</b>s</span>
-        </div>
-        <div class="center">
-          <span id="overrideBadge" class="badge hidden">EMERGENCY</span>
-        </div>
-        <div class="arm east" data-dir="east">
-          <span class="dir">E</span>
-          <span class="light"></span>
-          <span class="meta"><b id="eCount">—</b> veh · <b id="eGreen">—</b>s</span>
-        </div>
-        <div class="arm south" data-dir="south">
-          <span class="dir">S</span>
-          <span class="light"></span>
-          <span class="meta"><b id="sCount">—</b> veh · <b id="sGreen">—</b>s</span>
-        </div>
-      </div>
-      <ul class="timing" id="timingList"></ul>
+    <section class="panel result-panel">
+      <h2>2. Primary vehicle</h2>
+      <div id="primaryCard" class="empty">Upload a video to start detection.</div>
+
+      <h2 class="sub">Detected vehicles</h2>
+      <div id="vehicleList" class="vehicle-list"></div>
+
+      <h2 class="sub">Violations found</h2>
+      <div id="violationList" class="vehicle-list"></div>
     </section>
 
-    <section class="panel challan">
-      <h2>Challan preview</h2>
-      <p class="hint">Demo notice text (no SMS sent without gateway).</p>
-      <div class="grid-inputs challan-grid">
-        <label>Plate <input id="plate" value="GJ05AB1234" /></label>
-        <label>Violation
-          <select id="violation">
-            <option value="red_light_jump">Red light jump</option>
-            <option value="overspeed">Overspeed</option>
-            <option value="no_helmet">No helmet</option>
-            <option value="wrong_side">Wrong side</option>
-            <option value="stop_line_crossing">Stop line crossing</option>
-          </select>
-        </label>
-        <label>Location <input id="location" value="Ring Road" /></label>
-        <label>Fine ₹ <input id="fine" type="number" value="1000" /></label>
-      </div>
-      <button id="challanBtn" type="button">Generate notice</button>
-      <pre id="smsOut" class="sms"></pre>
+    <section class="panel receipt-panel">
+      <h2>3. Challan receipt</h2>
+      <p class="hint">Generated when speed &gt; limit or other rule violations fire.</p>
+      <div id="receipts"></div>
     </section>
   </main>
 
   <footer>
-    <a href="/docs">API docs</a>
+    <a href="/docs">API</a>
     <a href="/health">Health</a>
     <span id="clock"></span>
   </footer>

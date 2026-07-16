@@ -1,11 +1,17 @@
 const $ = (id) => document.getElementById(id);
 
-const DIR_IDS = {
-  north: { count: "nCount", green: "nGreen" },
-  south: { count: "sCount", green: "sGreen" },
-  east: { count: "eCount", green: "eGreen" },
-  west: { count: "wCount", green: "wGreen" },
+const VIOLATION_LABELS = {
+  overspeed: "Over speed",
+  no_helmet: "No helmet",
+  seat_belt: "No seat belt",
+  red_light_jump: "Red light jump",
+  stop_line_crossing: "Stop line crossing",
+  wrong_side: "Wrong side",
 };
+
+function labelViolation(v) {
+  return VIOLATION_LABELS[v] || String(v).replaceAll("_", " ");
+}
 
 async function checkHealth() {
   const el = $("apiStatus");
@@ -20,129 +26,181 @@ async function checkHealth() {
   }
 }
 
-function payload() {
-  const emergency = $("emergency").value || null;
-  return {
-    north: Number($("north").value) || 0,
-    south: Number($("south").value) || 0,
-    east: Number($("east").value) || 0,
-    west: Number($("west").value) || 0,
-    rush_hour: $("rushHour").checked,
-    emergency_direction: emergency,
+function setupUpload() {
+  const input = $("videoFile");
+  const drop = $("dropZone");
+  const preview = $("preview");
+  const label = $("dropLabel");
+
+  const useFile = (file) => {
+    if (!file) return;
+    label.textContent = file.name;
+    preview.src = URL.createObjectURL(file);
+    preview.classList.remove("hidden");
   };
-}
 
-function renderDecision(data) {
-  const maxGreen = Math.max(...data.phases.map((p) => p.green_seconds), 1);
-  const list = $("timingList");
-  list.innerHTML = "";
-
-  let best = null;
-  for (const p of data.phases) {
-    if (!best || p.green_seconds > best.green_seconds) best = p;
-  }
-
-  document.querySelectorAll(".arm").forEach((arm) => {
-    arm.classList.remove("active", "amber");
+  drop.addEventListener("click", () => input.click());
+  input.addEventListener("change", () => useFile(input.files?.[0]));
+  drop.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    drop.classList.add("drag");
   });
-
-  for (const p of data.phases) {
-    const ids = DIR_IDS[p.direction];
-    if (!ids) continue;
-    $(ids.count).textContent = p.waiting_vehicles;
-    $(ids.green).textContent = p.green_seconds;
-
-    const arm = document.querySelector(`.arm.${p.direction}`);
-    if (arm) {
-      if (data.emergency_override && p.direction === data.emergency_direction) {
-        arm.classList.add("active");
-      } else if (!data.emergency_override && best && p.direction === best.direction) {
-        arm.classList.add("active");
-      } else if (p.green_seconds >= 20) {
-        arm.classList.add("amber");
-      }
+  drop.addEventListener("dragleave", () => drop.classList.remove("drag"));
+  drop.addEventListener("drop", (e) => {
+    e.preventDefault();
+    drop.classList.remove("drag");
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      input.files = dt.files;
+      useFile(file);
     }
-
-    const li = document.createElement("li");
-    const pct = Math.round((p.green_seconds / maxGreen) * 100);
-    li.innerHTML = `
-      <span>${p.direction.toUpperCase()}</span>
-      <div class="bar"><span style="width:${pct}%"></span></div>
-      <span>${p.green_seconds}s</span>
-    `;
-    list.appendChild(li);
-  }
-
-  const badge = $("overrideBadge");
-  if (data.emergency_override) {
-    badge.classList.remove("hidden");
-    badge.textContent = `EMERGENCY → ${String(data.emergency_direction || "").toUpperCase()}`;
-  } else {
-    badge.classList.add("hidden");
-  }
+  });
 }
 
-async function runSignal() {
-  const btn = $("runBtn");
+function renderPrimary(v, limit) {
+  const box = $("primaryCard");
+  if (!v) {
+    box.className = "empty";
+    box.textContent = "No vehicles detected in sampled frames. Try a clearer road video.";
+    return;
+  }
+  const over = v.max_speed_kmh != null && v.max_speed_kmh > limit;
+  const speedClass = over ? "bad" : "ok";
+  const img = v.evidence_jpeg_b64
+    ? `<img src="data:image/jpeg;base64,${v.evidence_jpeg_b64}" alt="vehicle" />`
+    : `<div class="empty">No snapshot</div>`;
+  box.className = "primary";
+  box.innerHTML = `
+    ${img}
+    <div class="kv">
+      <div><span>Track ID</span><b>#${v.track_id}</b></div>
+      <div><span>Type</span><b>${v.vehicle_type}</b></div>
+      <div><span>Registration / plate</span><b>${v.plate_number || "NOT READ"}</b></div>
+      <div><span>Speed</span><b class="${speedClass}">${v.max_speed_kmh != null ? v.max_speed_kmh + " km/h" : "—"}</b></div>
+      <div><span>Limit</span><b>${limit} km/h</b></div>
+      <div><span>Status</span><b class="${over ? "bad" : "ok"}">${over ? "OVERSPEED — challan eligible" : "Within limit"}</b></div>
+    </div>
+  `;
+}
+
+function renderVehicles(list, limit) {
+  const el = $("vehicleList");
+  if (!list?.length) {
+    el.innerHTML = `<div class="empty">None yet.</div>`;
+    return;
+  }
+  el.innerHTML = list
+    .slice(0, 12)
+    .map((v) => {
+      const over = v.max_speed_kmh != null && v.max_speed_kmh > limit;
+      return `<div class="vehicle-row">
+        <span class="pill">#${v.track_id} ${v.vehicle_type}</span>
+        <span>${v.plate_number || "Plate unread"}</span>
+        <span class="${over ? "pill bad" : "pill"}">${v.max_speed_kmh != null ? v.max_speed_kmh + " km/h" : "—"}</span>
+      </div>`;
+    })
+    .join("");
+}
+
+function renderViolations(rows) {
+  const el = $("violationList");
+  if (!rows?.length) {
+    el.innerHTML = `<div class="empty">No violations in this clip (or speed stayed ≤ limit).</div>`;
+    return;
+  }
+  el.innerHTML = rows
+    .map(
+      (r) => `<div class="vehicle-row">
+        <span class="pill bad">${labelViolation(r.violation)}</span>
+        <span>${r.plate_number || "UNKNOWN"} · track #${r.track_id}</span>
+        <span class="pill">Challan ${r.challan_id}</span>
+      </div>`
+    )
+    .join("");
+}
+
+function renderReceipts(challans) {
+  const el = $("receipts");
+  if (!challans?.length) {
+    el.innerHTML = `<div class="empty">No challan generated yet. Overspeed (&gt; limit) or other rule hits will appear here.</div>`;
+    return;
+  }
+  el.innerHTML = challans
+    .map((c) => {
+      const img = c.evidence_jpeg_b64
+        ? `<img src="data:image/jpeg;base64,${c.evidence_jpeg_b64}" alt="evidence" />`
+        : "";
+      return `<article class="receipt">
+        <h3>Traffic Challan</h3>
+        <div class="rid">ID ${c.challan_id} · ${c.status}</div>
+        <dl>
+          <dt>Registration</dt><dd>${c.registration_number}</dd>
+          <dt>Vehicle</dt><dd>${c.vehicle_type}</dd>
+          <dt>Violation</dt><dd>${labelViolation(c.violation)}</dd>
+          <dt>Location</dt><dd>${c.location}</dd>
+          <dt>Speed</dt><dd>${c.speed_kmh != null ? c.speed_kmh + " km/h" : "—"} (limit ${c.speed_limit_kmh})</dd>
+          <dt>Time</dt><dd>${new Date(c.occurred_at).toLocaleString()}</dd>
+          <dt>Note</dt><dd>${c.officer_note}</dd>
+        </dl>
+        <div class="fine"><span>Fine amount</span><b>₹${Math.round(c.fine_amount)}</b></div>
+        ${img}
+      </article>`;
+    })
+    .join("");
+}
+
+async function analyze() {
+  const file = $("videoFile").files?.[0];
+  if (!file) {
+    $("progress").textContent = "Please choose a traffic video first.";
+    return;
+  }
+
+  const btn = $("analyzeBtn");
   btn.disabled = true;
-  btn.textContent = "Computing…";
+  btn.textContent = "Analyzing (CPU may take 1–3 min)…";
+  $("progress").textContent = "Uploading & running YOLO + tracking + OCR + speed…";
+
+  const fd = new FormData();
+  fd.append("video", file);
+  fd.append("location", $("location").value || "Ring Road");
+  fd.append("speed_limit_kmh", $("speedLimit").value || "60");
+  fd.append("max_frames", "60");
+  fd.append("run_ocr", $("runOcr").checked ? "true" : "false");
+
   try {
-    const res = await fetch("/signal/decide", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload()),
-    });
-    if (!res.ok) throw new Error(await res.text());
-    renderDecision(await res.json());
+    const res = await fetch("/demo/analyze", { method: "POST", body: fd });
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error(text.slice(0, 200) || res.statusText);
+    }
+    if (!res.ok) throw new Error(data.detail || text);
+
+    const limit = data.speed_limit_kmh;
+    renderPrimary(data.primary_vehicle, limit);
+    renderVehicles(data.vehicles, limit);
+    renderViolations(data.violations);
+    renderReceipts(data.challans);
+    $("progress").textContent = `Done · ${data.frames_processed} frames · ${data.vehicles.length} vehicles · ${data.challans.length} challan(s). ${
+      data.notes?.[0] || ""
+    }`;
   } catch (err) {
-    $("timingList").innerHTML = `<li style="color:#ff8a7a">Error: ${err.message}</li>`;
+    $("progress").textContent = `Failed: ${err.message}`;
   } finally {
     btn.disabled = false;
-    btn.textContent = "Run Signal AI";
+    btn.textContent = "Analyze video";
   }
 }
 
-async function previewChallan() {
-  const body = {
-    plate_number: $("plate").value.trim() || "UNKNOWN",
-    violation_type: $("violation").value,
-    location: $("location").value.trim() || "Unknown",
-    fine_amount: Number($("fine").value) || 1000,
-  };
-  $("smsOut").textContent = "Generating…";
-  try {
-    const res = await fetch("/challans/preview", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error(await res.text());
-    const data = await res.json();
-    $("smsOut").textContent = data.sms || JSON.stringify(data, null, 2);
-  } catch (err) {
-    $("smsOut").textContent = `Error: ${err.message}`;
-  }
-}
-
-function loadDemo() {
-  $("north").value = 45;
-  $("south").value = 10;
-  $("east").value = 6;
-  $("west").value = 18;
-  $("rushHour").checked = false;
-  $("emergency").value = "";
-  runSignal();
-}
-
-function tickClock() {
-  $("clock").textContent = new Date().toLocaleString();
-}
-
-$("runBtn").addEventListener("click", runSignal);
-$("demoBtn").addEventListener("click", loadDemo);
-$("challanBtn").addEventListener("click", previewChallan);
-
+$("analyzeBtn").addEventListener("click", analyze);
+setupUpload();
 checkHealth();
-tickClock();
-setInterval(tickClock, 1000);
-loadDemo();
+setInterval(() => {
+  $("clock").textContent = new Date().toLocaleString();
+}, 1000);
+$("clock").textContent = new Date().toLocaleString();

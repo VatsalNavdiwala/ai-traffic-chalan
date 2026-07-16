@@ -82,6 +82,59 @@ class NoHelmetRule(ViolationRule):
         return None
 
 
+class StopLineCrossingRule(ViolationRule):
+    name = "stop_line_crossing"
+
+    def check(self, track: Track, frame: np.ndarray, context: dict) -> ViolationEvent | None:
+        if not context.get("crossed_stop_line", {}).get(track.track_id):
+            return None
+        return ViolationEvent(
+            track_id=track.track_id,
+            violation_type=self.name,
+            plate_number=track.plate_text,
+            confidence=0.9,
+            location=context.get("location", "unknown"),
+            speed_kmh=track.speed_kmh,
+            evidence_frame=frame.copy(),
+        )
+
+
+class WrongSideRule(ViolationRule):
+    name = "wrong_side"
+
+    def check(self, track: Track, frame: np.ndarray, context: dict) -> ViolationEvent | None:
+        if not context.get("wrong_side", {}).get(track.track_id):
+            return None
+        return ViolationEvent(
+            track_id=track.track_id,
+            violation_type=self.name,
+            plate_number=track.plate_text,
+            confidence=0.88,
+            location=context.get("location", "unknown"),
+            speed_kmh=track.speed_kmh,
+            evidence_frame=frame.copy(),
+        )
+
+
+class NoSeatBeltRule(ViolationRule):
+    name = "seat_belt"
+
+    def check(self, track: Track, frame: np.ndarray, context: dict) -> ViolationEvent | None:
+        if track.class_name not in {"car", "truck", "bus", "auto"}:
+            return None
+        if context.get("seatbelt_ok", {}).get(track.track_id) is not False:
+            return None
+        return ViolationEvent(
+            track_id=track.track_id,
+            violation_type=self.name,
+            plate_number=track.plate_text,
+            confidence=0.75,
+            location=context.get("location", "unknown"),
+            evidence_frame=frame.copy(),
+            meta={"note": "Demo cabin heuristic — use dedicated seat-belt model for enforcement"},
+        )
+
+
 class ViolationDetector:
     """Phase 5 — orchestrates per-rule detection logic."""
 
@@ -89,7 +142,10 @@ class ViolationDetector:
         self.rules = rules or [
             OverspeedRule(),
             RedLightJumpRule(),
+            StopLineCrossingRule(),
+            WrongSideRule(),
             NoHelmetRule(),
+            NoSeatBeltRule(),
         ]
 
     def evaluate(
