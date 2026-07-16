@@ -141,7 +141,7 @@ class DemoVideoAnalyzer:
         self.detector = VehicleDetector(confidence=0.25, device=settings.device)
         self.tracker = VehicleTracker()
         self.speed = SingleCameraDemoEstimator(meters_per_pixel=0.05, fps=25.0)
-        self.ocr = PlateOCR()
+        self._ocr: PlateOCR | None = None
         self.challan = ChallanService()
         self.violations = ViolationDetector(
             rules=[
@@ -154,14 +154,20 @@ class DemoVideoAnalyzer:
             ]
         )
 
+    @property
+    def ocr(self) -> PlateOCR:
+        if self._ocr is None:
+            self._ocr = PlateOCR()
+        return self._ocr
+
     def analyze(
         self,
         video_path: str | Path,
         location: str = "Ring Road",
         speed_limit_kmh: float = 60.0,
-        max_frames: int = 90,
-        frame_stride: int = 2,
-        run_ocr: bool = True,
+        max_frames: int = 24,
+        frame_stride: int = 3,
+        run_ocr: bool = False,
     ) -> DemoAnalyzeResult:
         path = Path(video_path)
         cap = cv2.VideoCapture(str(path))
@@ -171,11 +177,13 @@ class DemoVideoAnalyzer:
         fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
         self.speed.fps = float(fps)
         notes = [
+            "Render Free: analysis uses short sample of frames for speed/RAM.",
             "Single-camera speed is demonstration-only (not legally certified).",
-            "Red-light / stop-line / wrong-side use demo geometry on the frame.",
-            "Helmet / seat-belt use demo heuristics unless custom models are installed.",
+            "OCR is optional — enable only if the server has enough memory.",
             "Owner phone/address require official government registration API access.",
         ]
+        if run_ocr:
+            notes.append("OCR enabled — may be slow or fail on low-memory hosts.")
 
         track_stats: dict[int, dict[str, Any]] = {}
         prev_centroid: dict[int, tuple[float, float]] = {}
@@ -203,6 +211,13 @@ class DemoVideoAnalyzer:
                 continue
 
             h, w = frame.shape[:2]
+            # Downscale large frames to fit Render Free RAM / CPU
+            max_side = 640
+            if max(h, w) > max_side:
+                scale = max_side / float(max(h, w))
+                frame = cv2.resize(frame, (int(w * scale), int(h * scale)))
+                h, w = frame.shape[:2]
+
             stop_y = int(h * 0.72)
             detections = self.detector.detect(frame)
             tracks = self.tracker.update(detections, frame)

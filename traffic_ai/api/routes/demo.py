@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import tempfile
 from pathlib import Path
 
@@ -62,39 +63,59 @@ async def analyze_traffic_video(
     video: UploadFile = File(..., description="Traffic road video (mp4/avi/mov)"),
     location: str = Form("Ring Road"),
     speed_limit_kmh: float = Form(60.0),
-    max_frames: int = Form(60),
-    run_ocr: str = Form("true"),
+    max_frames: int = Form(20),
+    run_ocr: str = Form("false"),
 ) -> DemoAnalyzeResponse:
     suffix = Path(video.filename or "upload.mp4").suffix.lower() or ".mp4"
     if suffix not in {".mp4", ".avi", ".mov", ".mkv", ".webm"}:
         raise HTTPException(400, "Upload a video file (mp4, avi, mov, mkv, webm)")
 
-    # Keep Render free-tier responsive
-    max_frames = max(10, min(int(max_frames), 90))
+    # Render Free: keep analysis short to avoid 502 timeout / OOM
+    max_frames = max(8, min(int(max_frames), 30))
     ocr_enabled = str(run_ocr).lower() in {"1", "true", "yes", "on"}
 
-    raw = await video.read()
-    if not raw:
-        raise HTTPException(400, "Empty upload")
-    if len(raw) > 1024 * 1024 * 1024:
-        raise HTTPException(400, "Video too large (max 1 GB)")
-
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    tmp_path = Path(tmp.name)
+    size = 0
+    max_bytes = 1024 * 1024 * 1024
     try:
-        tmp.write(raw)
+        while True:
+            chunk = await video.read(1024 * 1024)
+            if not chunk:
+                break
+            size += len(chunk)
+            if size > max_bytes:
+                raise HTTPException(400, "Video too large (max 1 GB)")
+            tmp.write(chunk)
         tmp.close()
-        result = get_analyzer().analyze(
-            tmp.name,
-            location=location.strip() or "Ring Road",
-            speed_limit_kmh=float(speed_limit_kmh),
-            max_frames=max_frames,
-            frame_stride=2,
-            run_ocr=ocr_enabled,
+        if size == 0:
+            raise HTTPException(400, "Empty upload")
+
+        analyzer = get_analyzer()
+        result = await asyncio.to_thread(
+            analyzer.analyze,
+            str(tmp_path),
+            location.strip() or "Ring Road",
+            float(speed_limit_kmh),
+            max_frames,
+            4,  # frame_stride
+            ocr_enabled,
         )
+    except HTTPException:
+        raise
+    except MemoryError as exc:
+        raise HTTPException(
+            503,
+            "Server out of memory. Use a shorter video and keep OCR off on Free tier.",
+        ) from exc
     except Exception as exc:
         raise HTTPException(500, f"Analysis failed: {exc}") from exc
     finally:
-        Path(tmp.name).unlink(missing_ok=True)
+        try:
+            tmp.close()
+        except Exception:
+            pass
+        tmp_path.unlink(missing_ok=True)
 
     def vehicle_out(v) -> VehicleOut | None:
         if v is None:

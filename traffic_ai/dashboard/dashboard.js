@@ -190,26 +190,31 @@ async function analyze() {
 
   const btn = $("analyzeBtn");
   btn.disabled = true;
-  btn.textContent = "Analyzing (CPU may take 1–3 min)…";
-  $("progress").textContent = "Uploading & running YOLO + tracking + OCR + speed…";
+  btn.textContent = "Analyzing (keep video short)…";
+  $("progress").textContent = "Uploading & running YOLO + tracking + speed (OCR off recommended on Free)…";
 
   const fd = new FormData();
   fd.append("video", file);
   fd.append("location", $("location").value || "Ring Road");
   fd.append("speed_limit_kmh", $("speedLimit").value || "60");
-  fd.append("max_frames", "60");
+  fd.append("max_frames", "20");
   fd.append("run_ocr", $("runOcr").checked ? "true" : "false");
 
   try {
     const res = await fetch("/demo/analyze", { method: "POST", body: fd });
     const text = await res.text();
+    if (res.status === 502 || res.status === 504 || text.includes("<!DOCTYPE html>")) {
+      throw new Error(
+        "Server timed out (502). Use a shorter video (10–30s), leave OCR unchecked, then retry after redeploy."
+      );
+    }
     let data;
     try {
       data = JSON.parse(text);
     } catch {
       throw new Error(text.slice(0, 200) || res.statusText);
     }
-    if (!res.ok) throw new Error(data.detail || text);
+    if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : text);
 
     const limit = data.speed_limit_kmh;
     renderAnnotated(data.annotated_frame_jpeg_b64);

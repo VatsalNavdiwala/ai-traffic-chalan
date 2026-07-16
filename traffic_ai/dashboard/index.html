@@ -25,7 +25,7 @@
   <main class="layout demo-layout">
     <section class="panel upload-panel">
       <h2>1. Upload traffic video</h2>
-      <p class="hint">MP4/AVI/MOV up to <b>1 GB</b>. AI detects vehicles, reads plate, estimates speed, issues challan if over limit.</p>
+      <p class="hint">MP4/AVI/MOV up to <b>1 GB</b>. On Render Free use a <b>short clip (10–30s)</b> and keep OCR off to avoid 502 timeouts.</p>
 
       <label class="drop" id="dropZone">
         <input id="videoFile" type="file" accept="video/*" hidden />
@@ -37,7 +37,7 @@
         <label>Location <input id="location" value="Ring Road Junction" /></label>
         <label>Speed limit (km/h) <input id="speedLimit" type="number" min="10" value="60" /></label>
       </div>
-      <label class="check"><input id="runOcr" type="checkbox" checked /> Read number plate (OCR)</label>
+      <label class="check"><input id="runOcr" type="checkbox" /> Read number plate (OCR — heavy, may 502 on Free)</label>
 
       <button id="analyzeBtn" type="button">Analyze video</button>
       <p class="hint" id="progress">Ready.</p>

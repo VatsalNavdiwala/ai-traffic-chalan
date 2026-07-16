@@ -72,6 +72,7 @@ class VehicleDetector:
             source=frame,
             conf=self.confidence,
             device=self.device,
+            imgsz=320,
             verbose=False,
         )
         detections: list[Detection] = []
