@@ -67,6 +67,24 @@ function setupUpload() {
   });
 }
 
+function renderAnnotated(b64) {
+  const el = $("annotatedWrap");
+  if (!b64) {
+    el.className = "annotated-wrap empty";
+    el.textContent = "No annotated frame yet.";
+    return;
+  }
+  el.className = "annotated-wrap";
+  el.innerHTML = `
+    <img src="data:image/jpeg;base64,${b64}" alt="Vehicles with bounding boxes and speed" />
+    <p class="legend">
+      <span><i style="background:#3cc878"></i> Normal</span>
+      <span><i style="background:#dc2828"></i> Overspeed</span>
+      <span>Label: ID · type · speed · plate</span>
+    </p>
+  `;
+}
+
 function renderPrimary(v, limit) {
   const box = $("primaryCard");
   if (!v) {
@@ -77,7 +95,7 @@ function renderPrimary(v, limit) {
   const over = v.max_speed_kmh != null && v.max_speed_kmh > limit;
   const speedClass = over ? "bad" : "ok";
   const img = v.evidence_jpeg_b64
-    ? `<img src="data:image/jpeg;base64,${v.evidence_jpeg_b64}" alt="vehicle" />`
+    ? `<img src="data:image/jpeg;base64,${v.evidence_jpeg_b64}" alt="vehicle with box" />`
     : `<div class="empty">No snapshot</div>`;
   box.className = "primary";
   box.innerHTML = `
@@ -103,7 +121,11 @@ function renderVehicles(list, limit) {
     .slice(0, 12)
     .map((v) => {
       const over = v.max_speed_kmh != null && v.max_speed_kmh > limit;
+      const thumb = v.evidence_jpeg_b64
+        ? `<img class="row-thumb" src="data:image/jpeg;base64,${v.evidence_jpeg_b64}" alt="" />`
+        : "";
       return `<div class="vehicle-row">
+        ${thumb}
         <span class="pill">#${v.track_id} ${v.vehicle_type}</span>
         <span>${v.plate_number || "Plate unread"}</span>
         <span class="${over ? "pill bad" : "pill"}">${v.max_speed_kmh != null ? v.max_speed_kmh + " km/h" : "—"}</span>
@@ -190,6 +212,7 @@ async function analyze() {
     if (!res.ok) throw new Error(data.detail || text);
 
     const limit = data.speed_limit_kmh;
+    renderAnnotated(data.annotated_frame_jpeg_b64);
     renderPrimary(data.primary_vehicle, limit);
     renderVehicles(data.vehicles, limit);
     renderViolations(data.violations);

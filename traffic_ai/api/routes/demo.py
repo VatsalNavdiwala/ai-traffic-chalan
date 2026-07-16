@@ -54,6 +54,7 @@ class DemoAnalyzeResponse(BaseModel):
     violations: list[dict] = Field(default_factory=list)
     challans: list[ChallanOut] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
+    annotated_frame_jpeg_b64: str | None = None
 
 
 @router.post("/analyze", response_model=DemoAnalyzeResponse)
@@ -134,4 +135,5 @@ async def analyze_traffic_video(
             for c in result.challans
         ],
         notes=result.notes,
+        annotated_frame_jpeg_b64=result.annotated_frame_jpeg_b64,
     )

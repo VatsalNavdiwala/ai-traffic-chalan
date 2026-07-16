@@ -29,15 +29,68 @@ from traffic_ai.config.settings import get_settings
 from traffic_ai.utils.types import ViolationEvent
 
 
-def _encode_jpeg(frame: np.ndarray, max_w: int = 640) -> str:
+def _encode_jpeg(frame: np.ndarray, max_w: int = 960) -> str:
     h, w = frame.shape[:2]
     if w > max_w:
         scale = max_w / w
         frame = cv2.resize(frame, (max_w, int(h * scale)))
-    ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+    ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
     if not ok:
         return ""
     return base64.b64encode(buf.tobytes()).decode("ascii")
+
+
+def draw_tracks(
+    frame: np.ndarray,
+    tracks: list,
+    speed_limit_kmh: float = 60.0,
+    highlight_id: int | None = None,
+) -> np.ndarray:
+    """Draw bounding boxes with track ID, class, plate, and speed."""
+    vis = frame.copy()
+    for t in tracks:
+        x1, y1, x2, y2 = map(int, t.bbox)
+        over = t.speed_kmh is not None and t.speed_kmh > speed_limit_kmh
+        is_hi = highlight_id is not None and t.track_id == highlight_id
+        if over:
+            color = (40, 40, 220)  # red-ish BGR
+        elif is_hi:
+            color = (50, 220, 50)
+        else:
+            color = (60, 200, 120)
+
+        thickness = 3 if is_hi or over else 2
+        cv2.rectangle(vis, (x1, y1), (x2, y2), color, thickness)
+
+        speed_txt = f"{t.speed_kmh:.0f} km/h" if t.speed_kmh is not None else "—"
+        plate = t.plate_text or ""
+        label = f"ID {t.track_id} {t.class_name} | {speed_txt}"
+        if plate:
+            label += f" | {plate}"
+
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        scale = 0.55
+        (tw, th), baseline = cv2.getTextSize(label, font, scale, 1)
+        ty = max(0, y1 - 8)
+        cv2.rectangle(vis, (x1, ty - th - 6), (x1 + tw + 8, ty + 4), color, -1)
+        cv2.putText(vis, label, (x1 + 4, ty - 2), font, scale, (255, 255, 255), 1, cv2.LINE_AA)
+
+        # Speed badge on box corner
+        badge = speed_txt
+        (bw, bh), _ = cv2.getTextSize(badge, font, 0.6, 2)
+        bx2, by1 = x2, y1
+        cv2.rectangle(vis, (bx2 - bw - 10, by1), (bx2, by1 + bh + 10), color, -1)
+        cv2.putText(
+            vis,
+            badge,
+            (bx2 - bw - 5, by1 + bh + 4),
+            font,
+            0.6,
+            (255, 255, 255),
+            2,
+            cv2.LINE_AA,
+        )
+    return vis
 
 
 @dataclass
@@ -77,6 +130,7 @@ class DemoAnalyzeResult:
     violations: list[dict[str, Any]] = field(default_factory=list)
     challans: list[ChallanReceipt] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    annotated_frame_jpeg_b64: str | None = None
 
 
 class DemoVideoAnalyzer:
@@ -134,6 +188,8 @@ class DemoVideoAnalyzer:
         violation_rows: list[dict[str, Any]] = []
         challans: list[ChallanReceipt] = []
         last_frame: np.ndarray | None = None
+        best_annotated: np.ndarray | None = None
+        best_annotated_score = -1
 
         frames_processed = 0
         frame_idx = 0
@@ -179,7 +235,6 @@ class DemoVideoAnalyzer:
                     helmet_ok_frame[t.track_id] = self._demo_helmet_ok(frame, t.bbox)
                     helmet_ok[t.track_id] = helmet_ok_frame[t.track_id]
                 if t.class_name in {"car", "truck", "bus", "auto"}:
-                    # Conservative: only flag when cabin crop is very bright/empty (weak demo)
                     seatbelt_ok_frame[t.track_id] = self._demo_seatbelt_ok(frame, t.bbox)
                     seatbelt_ok[t.track_id] = seatbelt_ok_frame[t.track_id]
 
@@ -192,6 +247,7 @@ class DemoVideoAnalyzer:
                         "frames": 0,
                         "best_frame": None,
                         "best_area": 0.0,
+                        "best_bbox": None,
                     },
                 )
                 stats["frames"] += 1
@@ -199,10 +255,6 @@ class DemoVideoAnalyzer:
                 if t.speed_kmh is not None:
                     stats["speeds"].append(float(t.speed_kmh))
                 area = max(0.0, (t.bbox[2] - t.bbox[0]) * (t.bbox[3] - t.bbox[1]))
-                if area > stats["best_area"]:
-                    stats["best_area"] = area
-                    stats["best_frame"] = frame.copy()
-                    stats["best_bbox"] = t.bbox
 
                 # OCR once per track when box is large enough
                 if (
@@ -222,6 +274,40 @@ class DemoVideoAnalyzer:
                 if stats["plate"]:
                     t.plate_text = stats["plate"]
 
+            # Draw boxes + speed on this frame
+            annotated = draw_tracks(frame, tracks, speed_limit_kmh=speed_limit_kmh)
+            # Demo stop-line marker
+            cv2.line(annotated, (0, stop_y), (w, stop_y), (0, 200, 255), 2)
+            cv2.putText(
+                annotated,
+                "STOP LINE (demo)",
+                (12, stop_y - 8),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (0, 200, 255),
+                1,
+                cv2.LINE_AA,
+            )
+
+            score = len(tracks) * 10 + sum(1 for t in tracks if t.speed_kmh is not None)
+            if score >= best_annotated_score:
+                best_annotated_score = score
+                best_annotated = annotated.copy()
+
+            for t in tracks:
+                stats = track_stats[t.track_id]
+                area = max(0.0, (t.bbox[2] - t.bbox[0]) * (t.bbox[3] - t.bbox[1]))
+                if area > stats["best_area"]:
+                    stats["best_area"] = area
+                    stats["best_bbox"] = t.bbox
+                    # Per-vehicle evidence with boxes (highlight this track)
+                    stats["best_frame"] = draw_tracks(
+                        frame,
+                        tracks,
+                        speed_limit_kmh=speed_limit_kmh,
+                        highlight_id=t.track_id,
+                    )
+
             context = {
                 "location": location,
                 "speed_limit_kmh": speed_limit_kmh,
@@ -237,10 +323,16 @@ class DemoVideoAnalyzer:
                 key = (ev.track_id, ev.violation_type)
                 if key in seen_violations:
                     continue
-                # Attach plate from stats if missing
                 plate = ev.plate_number or track_stats.get(ev.track_id, {}).get("plate")
                 ev.plate_number = plate
                 seen_violations.add(key)
+                # Annotated evidence for challan
+                ev.evidence_frame = draw_tracks(
+                    frame,
+                    tracks,
+                    speed_limit_kmh=speed_limit_kmh,
+                    highlight_id=ev.track_id,
+                )
                 draft = self.challan.create_draft(ev)
                 evidence_b64 = _encode_jpeg(ev.evidence_frame) if ev.evidence_frame is not None else None
                 vtype = track_stats.get(ev.track_id, {}).get("vehicle_type", "vehicle")
@@ -301,13 +393,16 @@ class DemoVideoAnalyzer:
         elif vehicles:
             primary = vehicles[0]
 
+        annotated_b64 = _encode_jpeg(best_annotated) if best_annotated is not None else None
+
         # If primary is overspeeding and no challan yet for it, force overspeed challan
         if primary and primary.max_speed_kmh and primary.max_speed_kmh > speed_limit_kmh:
             already = any(
                 c.plate_number == (primary.plate_number or "UNKNOWN") and c.violation == "overspeed"
                 for c in challans
             )
-            if not already and last_frame is not None:
+            if not already:
+                evidence_frame = best_annotated if best_annotated is not None else last_frame
                 ev = ViolationEvent(
                     track_id=primary.track_id,
                     violation_type="overspeed",
@@ -315,7 +410,7 @@ class DemoVideoAnalyzer:
                     confidence=0.95,
                     location=location,
                     speed_kmh=primary.max_speed_kmh,
-                    evidence_frame=last_frame.copy(),
+                    evidence_frame=evidence_frame.copy() if evidence_frame is not None else None,
                 )
                 draft = self.challan.create_draft(ev)
                 receipt = ChallanReceipt(
@@ -330,7 +425,7 @@ class DemoVideoAnalyzer:
                     fine_amount=draft.fine_amount,
                     status=draft.status,
                     occurred_at=datetime.utcnow().isoformat() + "Z",
-                    evidence_jpeg_b64=primary.evidence_jpeg_b64,
+                    evidence_jpeg_b64=primary.evidence_jpeg_b64 or annotated_b64,
                 )
                 challans.insert(0, receipt)
                 violation_rows.insert(
@@ -354,6 +449,7 @@ class DemoVideoAnalyzer:
             violations=violation_rows,
             challans=challans,
             notes=notes,
+            annotated_frame_jpeg_b64=annotated_b64,
         )
 
     @staticmethod
