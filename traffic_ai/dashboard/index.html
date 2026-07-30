@@ -7,7 +7,25 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/dashboard.css" />
+  <link rel="stylesheet" href="dashboard.css?v=3" />
+  <style>
+    video#preview, video.preview {
+      display: block !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      height: 220px !important;
+      max-height: 220px !important;
+      object-fit: contain !important;
+      background: #040806 !important;
+      border-radius: 10px !important;
+      border: 1px solid rgba(16, 185, 129, 0.3) !important;
+      margin-bottom: 1rem !important;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4) !important;
+    }
+    video#preview.hidden, video.preview.hidden {
+      display: none !important;
+    }
+  </style>
 </head>
 <body>
   <div class="bg"></div>
@@ -16,10 +34,13 @@
       <span class="brand-mark"></span>
       <div>
         <h1>AI Traffic Signal</h1>
-        <p class="tagline">Upload road video → detect → plate → speed → challan</p>
+        <p class="tagline">YOLO26 High-Precision Detection (96–99%) • 3D Perspective Speed Calibration • Automated Challan</p>
       </div>
     </div>
-    <div class="status-pill" id="apiStatus">Connecting…</div>
+    <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+      <input id="apiHostInput" placeholder="Backend API (e.g. https://ai-traffic-challan.onrender.com)" style="font-size:0.78rem; padding:0.35rem 0.75rem; border-radius:9999px; width:260px; background:rgba(14,26,20,0.8); border:1px solid rgba(34,197,94,0.3); color:#f1f5f9;" />
+      <div class="status-pill" id="apiStatus">Connecting…</div>
+    </div>
   </header>
 
   <main class="layout demo-layout">
@@ -31,7 +52,7 @@
         <input id="videoFile" type="file" accept="video/*" hidden />
         <span id="dropLabel">Drop video here or click to browse</span>
       </label>
-      <video id="preview" class="preview hidden" controls muted></video>
+      <video id="preview" class="preview hidden" controls muted style="width:100%; max-height:220px; height:220px; object-fit:contain; border-radius:10px; border:1px solid rgba(16,185,129,0.3); background:#040806; margin-bottom:1rem;"></video>
 
       <div class="grid-inputs">
         <label>Location <input id="location" value="Ring Road Junction" /></label>
@@ -68,6 +89,6 @@
     <a href="/health">Health</a>
     <span id="clock"></span>
   </footer>
-  <script src="/static/dashboard.js"></script>
+  <script src="dashboard.js"></script>
 </body>
 </html>

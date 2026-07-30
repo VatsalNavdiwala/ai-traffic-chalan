@@ -9,21 +9,63 @@ const VIOLATION_LABELS = {
   wrong_side: "Wrong side",
 };
 
+let activeApiHost = null;
+
+function getApiHost() {
+  const inputVal = $("apiHostInput")?.value?.trim();
+  if (inputVal) {
+    localStorage.setItem("custom_api_host", inputVal);
+    return inputVal.replace(/\/+$/, "");
+  }
+  const saved = localStorage.getItem("custom_api_host");
+  if (saved) return saved.replace(/\/+$/, "");
+
+  if (activeApiHost !== null) {
+    return activeApiHost;
+  }
+  const host = window.location.hostname;
+  if (host === "localhost" || host === "127.0.0.1") {
+    return "";
+  }
+  return "http://127.0.0.1:8000";
+}
+
 function labelViolation(v) {
   return VIOLATION_LABELS[v] || String(v).replaceAll("_", " ");
 }
 
 async function checkHealth() {
   const el = $("apiStatus");
-  try {
-    const res = await fetch("/health");
-    const data = await res.json();
-    el.textContent = `Live · ${data.app} v${data.version}`;
-    el.className = "status-pill ok";
-  } catch {
-    el.textContent = "API offline";
-    el.className = "status-pill err";
+  const candidates = [];
+  
+  const custom = $("apiHostInput")?.value?.trim() || localStorage.getItem("custom_api_host");
+  if (custom) {
+    candidates.push(custom.replace(/\/+$/, ""));
   }
+  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    candidates.push("");
+  }
+  candidates.push("http://127.0.0.1:8000");
+  candidates.push("https://ai-traffic-challan.onrender.com");
+
+  for (const base of candidates) {
+    try {
+      const res = await fetch(`${base}/health`);
+      if (res.ok) {
+        const data = await res.json();
+        activeApiHost = base;
+        el.textContent = `Live · ${data.app} v${data.version}`;
+        el.className = "status-pill ok";
+        if ($("apiHostInput") && !$("apiHostInput").value) {
+          $("apiHostInput").value = base || "http://127.0.0.1:8000";
+        }
+        return;
+      }
+    } catch {}
+  }
+
+  el.textContent = "API offline (Check backend URL)";
+  el.className = "status-pill err";
 }
 
 function setupUpload() {
@@ -190,8 +232,8 @@ async function analyze() {
 
   const btn = $("analyzeBtn");
   btn.disabled = true;
-  btn.textContent = "Analyzing (keep video short)…";
-  $("progress").textContent = "Uploading & running YOLO + tracking + speed (OCR off recommended on Free)…";
+  btn.textContent = "Analyzing video…";
+  $("progress").textContent = "Uploading & running YOLO26 detection + tracking + speed estimation…";
 
   const fd = new FormData();
   fd.append("video", file);
@@ -201,11 +243,12 @@ async function analyze() {
   fd.append("run_ocr", $("runOcr").checked ? "true" : "false");
 
   try {
-    const res = await fetch("/demo/analyze", { method: "POST", body: fd });
+    const apiHost = getApiHost();
+    const res = await fetch(`${apiHost}/demo/analyze`, { method: "POST", body: fd });
     const text = await res.text();
     if (res.status === 502 || res.status === 504 || text.includes("<!DOCTYPE html>")) {
       throw new Error(
-        "Server timed out (502). Use a shorter video (10–30s), leave OCR unchecked, then retry after redeploy."
+        "API endpoint returned non-JSON response. Ensure backend server is running on http://127.0.0.1:8000."
       );
     }
     let data;
@@ -234,6 +277,14 @@ async function analyze() {
 }
 
 $("analyzeBtn").addEventListener("click", analyze);
+if ($("apiHostInput")) {
+  const saved = localStorage.getItem("custom_api_host");
+  if (saved) $("apiHostInput").value = saved;
+  $("apiHostInput").addEventListener("change", () => {
+    localStorage.setItem("custom_api_host", $("apiHostInput").value.trim());
+    checkHealth();
+  });
+}
 setupUpload();
 checkHealth();
 setInterval(() => {

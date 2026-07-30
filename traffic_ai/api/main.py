@@ -49,6 +49,13 @@ def create_app() -> FastAPI:
         async def dashboard() -> FileResponse:
             return FileResponse(DASHBOARD_DIR / "index.html")
 
+        @app.get("/{filename:path}", include_in_schema=False)
+        async def serve_dashboard_file(filename: str) -> FileResponse:
+            file_path = DASHBOARD_DIR / filename
+            if file_path.is_file():
+                return FileResponse(file_path)
+            return FileResponse(DASHBOARD_DIR / "index.html")
+
     @app.on_event("startup")
     async def _startup() -> None:
         try:

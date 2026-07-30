@@ -115,7 +115,10 @@ async def analyze_traffic_video(
             tmp.close()
         except Exception:
             pass
-        tmp_path.unlink(missing_ok=True)
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except Exception:
+            pass
 
     def vehicle_out(v) -> VehicleOut | None:
         if v is None:
