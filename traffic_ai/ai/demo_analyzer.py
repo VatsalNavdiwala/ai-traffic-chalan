@@ -216,7 +216,7 @@ class DemoVideoAnalyzer:
 
             h, w = frame.shape[:2]
             # Downscale large frames to fit Render Free RAM / CPU
-            max_side = 480
+            max_side = 384
             if max(h, w) > max_side:
                 scale = max_side / float(max(h, w))
                 frame = cv2.resize(frame, (int(w * scale), int(h * scale)))

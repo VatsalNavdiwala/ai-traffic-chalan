@@ -66,6 +66,11 @@ def create_app() -> FastAPI:
             await init_db()
         except Exception:
             pass
+        try:
+            from traffic_ai.api.routes.demo import get_analyzer
+            get_analyzer()
+        except Exception:
+            pass
 
     return app
 
