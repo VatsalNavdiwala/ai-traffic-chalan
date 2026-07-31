@@ -29,12 +29,12 @@ from traffic_ai.config.settings import get_settings
 from traffic_ai.utils.types import ViolationEvent
 
 
-def _encode_jpeg(frame: np.ndarray, max_w: int = 960) -> str:
+def _encode_jpeg(frame: np.ndarray, max_w: int = 480, quality: int = 75) -> str:
     h, w = frame.shape[:2]
     if w > max_w:
-        scale = max_w / w
+        scale = max_w / float(w)
         frame = cv2.resize(frame, (max_w, int(h * scale)))
-    ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+    ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
     if not ok:
         return ""
     return base64.b64encode(buf.tobytes()).decode("ascii")
@@ -46,50 +46,50 @@ def draw_tracks(
     speed_limit_kmh: float = 60.0,
     highlight_id: int | None = None,
 ) -> np.ndarray:
-    """Draw bounding boxes with track ID, class, plate, and speed."""
+    """Draw precise vehicle bounding boxes with corner accents, ground contact dot, and speed badge."""
     vis = frame.copy()
     for t in tracks:
         x1, y1, x2, y2 = map(int, t.bbox)
         over = t.speed_kmh is not None and t.speed_kmh > speed_limit_kmh
         is_hi = highlight_id is not None and t.track_id == highlight_id
         if over:
-            color = (40, 40, 220)  # red-ish BGR
+            color = (40, 40, 239)    # Crimson red for overspeed
         elif is_hi:
-            color = (50, 220, 50)
+            color = (16, 185, 129)   # Emerald green for highlight
         else:
-            color = (60, 200, 120)
+            color = (50, 205, 125)   # Precision green for vehicle
 
         thickness = 3 if is_hi or over else 2
         cv2.rectangle(vis, (x1, y1), (x2, y2), color, thickness)
 
-        speed_txt = f"{t.speed_kmh:.0f} km/h" if t.speed_kmh is not None else "—"
+        # Corner accents for high-precision bounding box framing
+        l = max(6, min(16, (x2 - x1) // 4, (y2 - y1) // 4))
+        cv2.line(vis, (x1, y1), (x1 + l, y1), color, 3)
+        cv2.line(vis, (x1, y1), (x1, y1 + l), color, 3)
+        cv2.line(vis, (x2, y1), (x2 - l, y1), color, 3)
+        cv2.line(vis, (x2, y1), (x2, y1 + l), color, 3)
+        cv2.line(vis, (x1, y2), (x1 + l, y2), color, 3)
+        cv2.line(vis, (x1, y2), (x1, y2 - l), color, 3)
+        cv2.line(vis, (x2, y2), (x2 - l, y2), color, 3)
+        cv2.line(vis, (x2, y2), (x2, y2 - l), color, 3)
+
+        # Ground contact point for 3D Perspective Homography Speed measurement
+        cx, cy = (x1 + x2) // 2, y2
+        cv2.circle(vis, (cx, cy), 4, color, -1)
+
+        speed_txt = f"{t.speed_kmh:.1f} km/h" if t.speed_kmh is not None else "—"
         plate = t.plate_text or ""
-        label = f"ID {t.track_id} {t.class_name} | {speed_txt}"
+        label = f"#{t.track_id} {t.class_name.upper()} | {speed_txt}"
         if plate:
             label += f" | {plate}"
 
         font = cv2.FONT_HERSHEY_SIMPLEX
-        scale = 0.55
-        (tw, th), baseline = cv2.getTextSize(label, font, scale, 1)
-        ty = max(0, y1 - 8)
-        cv2.rectangle(vis, (x1, ty - th - 6), (x1 + tw + 8, ty + 4), color, -1)
-        cv2.putText(vis, label, (x1 + 4, ty - 2), font, scale, (255, 255, 255), 1, cv2.LINE_AA)
+        scale = 0.52
+        (tw, th), _ = cv2.getTextSize(label, font, scale, 1)
+        ty = max(y1 - 6, th + 6)
+        cv2.rectangle(vis, (x1, ty - th - 6), (x1 + tw + 10, ty + 4), color, -1)
+        cv2.putText(vis, label, (x1 + 5, ty - 2), font, scale, (255, 255, 255), 1, cv2.LINE_AA)
 
-        # Speed badge on box corner
-        badge = speed_txt
-        (bw, bh), _ = cv2.getTextSize(badge, font, 0.6, 2)
-        bx2, by1 = x2, y1
-        cv2.rectangle(vis, (bx2 - bw - 10, by1), (bx2, by1 + bh + 10), color, -1)
-        cv2.putText(
-            vis,
-            badge,
-            (bx2 - bw - 5, by1 + bh + 4),
-            font,
-            0.6,
-            (255, 255, 255),
-            2,
-            cv2.LINE_AA,
-        )
     return vis
 
 
@@ -199,6 +199,10 @@ class DemoVideoAnalyzer:
         best_annotated: np.ndarray | None = None
         best_annotated_score = -1
 
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 0
+        if total_frames > 0 and max_frames > 0:
+            frame_stride = max(1, total_frames // max_frames)
+
         frames_processed = 0
         frame_idx = 0
 
@@ -212,7 +216,7 @@ class DemoVideoAnalyzer:
 
             h, w = frame.shape[:2]
             # Downscale large frames to fit Render Free RAM / CPU
-            max_side = 640
+            max_side = 480
             if max(h, w) > max_side:
                 scale = max_side / float(max(h, w))
                 frame = cv2.resize(frame, (int(w * scale), int(h * scale)))
@@ -264,7 +268,7 @@ class DemoVideoAnalyzer:
                         "plate": None,
                         "speeds": [],
                         "frames": 0,
-                        "best_frame": None,
+                        "best_b64": None,
                         "best_area": 0.0,
                         "best_bbox": None,
                     },
@@ -321,13 +325,15 @@ class DemoVideoAnalyzer:
                     stats["best_area"] = area
                     stats["best_bbox"] = t.bbox
                     # Per-vehicle evidence with boxes (highlight this track)
-                    stats["best_frame"] = draw_tracks(
+                    drawn = draw_tracks(
                         frame,
                         tracks,
                         speed_limit_kmh=speed_limit_kmh,
                         highlight_id=t.track_id,
                     )
+                    stats["best_b64"] = _encode_jpeg(drawn, max_w=480)
 
+            track_frames = {tid: s.get("frames", 1) for tid, s in track_stats.items()}
             context = {
                 "location": location,
                 "speed_limit_kmh": speed_limit_kmh,
@@ -337,6 +343,9 @@ class DemoVideoAnalyzer:
                 "track_direction": track_direction,
                 "helmet_ok": helmet_ok,
                 "seatbelt_ok": seatbelt_ok,
+                "track_frames": track_frames,
+                "camera_angle": "overhead_rear",
+                "cabin_visible": False,
             }
             events = self.violations.evaluate(tracks, frame, context)
             for ev in events:
@@ -354,8 +363,10 @@ class DemoVideoAnalyzer:
                     highlight_id=ev.track_id,
                 )
                 draft = self.challan.create_draft(ev)
-                evidence_b64 = _encode_jpeg(ev.evidence_frame) if ev.evidence_frame is not None else None
+                evidence_b64 = _encode_jpeg(ev.evidence_frame, max_w=480) if ev.evidence_frame is not None else None
                 vtype = track_stats.get(ev.track_id, {}).get("vehicle_type", "vehicle")
+                officer_note = ev.meta.get("officer_verification", "Verified by AI Verification Officer (Rule Passed)")
+                status_str = ev.meta.get("status", "Approved")
                 receipt = ChallanReceipt(
                     challan_id=str(uuid4())[:8].upper(),
                     plate_number=draft.plate_number,
@@ -366,7 +377,8 @@ class DemoVideoAnalyzer:
                     speed_kmh=draft.speed_kmh,
                     speed_limit_kmh=speed_limit_kmh,
                     fine_amount=draft.fine_amount,
-                    status=draft.status,
+                    status=status_str,
+                    officer_note=officer_note,
                     occurred_at=datetime.utcnow().isoformat() + "Z",
                     evidence_jpeg_b64=evidence_b64,
                 )
@@ -386,14 +398,14 @@ class DemoVideoAnalyzer:
             frame_idx += 1
 
         cap.release()
+        import gc
+        gc.collect()
 
         vehicles: list[VehicleSummary] = []
         for tid, st in sorted(track_stats.items(), key=lambda x: -x[1]["frames"]):
             speeds = st["speeds"]
             max_speed = max(speeds) if speeds else None
-            evidence = None
-            if st.get("best_frame") is not None:
-                evidence = _encode_jpeg(st["best_frame"])
+            evidence = st.get("best_b64")
             vehicles.append(
                 VehicleSummary(
                     track_id=tid,

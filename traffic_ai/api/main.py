@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -51,6 +51,8 @@ def create_app() -> FastAPI:
 
         @app.get("/{filename:path}", include_in_schema=False)
         async def serve_dashboard_file(filename: str) -> FileResponse:
+            if filename.startswith(("demo", "health", "signal", "docs", "redoc", "openapi.json", "api")):
+                raise HTTPException(404, detail="API endpoint not found")
             file_path = DASHBOARD_DIR / filename
             if file_path.is_file():
                 return FileResponse(file_path)

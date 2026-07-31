@@ -26,8 +26,12 @@ class Settings(BaseSettings):
     celery_broker_url: str = "amqp://guest:guest@localhost:5672//"
     celery_result_backend: str = "redis://localhost:6379/1"
 
-    yolo_model_path: str = str(ROOT_DIR / "traffic_ai" / "models" / "weights" / "yolo26x.pt")
-    yolo_model_name: str = "yolo26x.pt"
+    yolo_model_path: str = str(
+        ROOT_DIR / "yolo11n.pt"
+        if (ROOT_DIR / "yolo11n.pt").exists()
+        else (ROOT_DIR / "traffic_ai" / "models" / "weights" / "yolo11n.pt")
+    )
+    yolo_model_name: str = "yolo11n.pt"
     yolo_confidence: float = 0.35
     enable_clahe: bool = True
     device: str = "cpu"

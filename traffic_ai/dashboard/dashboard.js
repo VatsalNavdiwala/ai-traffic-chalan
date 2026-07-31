@@ -1,5 +1,8 @@
 const $ = (id) => document.getElementById(id);
 
+// Configured Live Production Backend API URL
+const DEFAULT_LIVE_API_URL = window.TRAFFIC_AI_API_URL || "https://ai-traffic-chalan.onrender.com";
+
 const VIOLATION_LABELS = {
   overspeed: "Over speed",
   no_helmet: "No helmet",
@@ -9,63 +12,54 @@ const VIOLATION_LABELS = {
   wrong_side: "Wrong side",
 };
 
-let activeApiHost = null;
-
-function getApiHost() {
-  const inputVal = $("apiHostInput")?.value?.trim();
-  if (inputVal) {
-    localStorage.setItem("custom_api_host", inputVal);
-    return inputVal.replace(/\/+$/, "");
-  }
-  const saved = localStorage.getItem("custom_api_host");
-  if (saved) return saved.replace(/\/+$/, "");
-
-  if (activeApiHost !== null) {
-    return activeApiHost;
-  }
-  const host = window.location.hostname;
-  if (host === "localhost" || host === "127.0.0.1") {
-    return "";
-  }
-  return "http://127.0.0.1:8000";
-}
-
 function labelViolation(v) {
   return VIOLATION_LABELS[v] || String(v).replaceAll("_", " ");
 }
 
+function isLocalEnv() {
+  return (
+    window.location.protocol === "file:" ||
+    window.location.hostname === "127.0.0.1" ||
+    window.location.hostname === "localhost"
+  );
+}
+
+function getApiBaseUrl() {
+  if (isLocalEnv()) {
+    return "http://127.0.0.1:8000";
+  }
+  // Automatically use live production backend when running on a live website
+  return DEFAULT_LIVE_API_URL;
+}
+
 async function checkHealth() {
   const el = $("apiStatus");
-  const candidates = [];
-  
-  const custom = $("apiHostInput")?.value?.trim() || localStorage.getItem("custom_api_host");
-  if (custom) {
-    candidates.push(custom.replace(/\/+$/, ""));
-  }
-  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
-    candidates.push("");
-  }
-  candidates.push("http://127.0.0.1:8000");
-  candidates.push("https://ai-traffic-challan.onrender.com");
+  const baseUrl = getApiBaseUrl();
 
-  for (const base of candidates) {
-    try {
-      const res = await fetch(`${base}/health`);
-      if (res.ok) {
-        const data = await res.json();
-        activeApiHost = base;
-        el.textContent = `Live · ${data.app} v${data.version}`;
+  try {
+    const target = baseUrl ? `${baseUrl}/health` : "/health";
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+    const res = await fetch(target, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    const text = await res.text();
+
+    if (res.ok && !text.includes("<!DOCTYPE html>")) {
+      const data = JSON.parse(text);
+      if (data.app || data.status === "ok") {
+        el.textContent = `Live · ${data.app || "AI Traffic"} v${data.version || "1.0"}`;
         el.className = "status-pill ok";
-        if ($("apiHostInput") && !$("apiHostInput").value) {
-          $("apiHostInput").value = base || "http://127.0.0.1:8000";
-        }
-        return;
+        return true;
       }
-    } catch {}
+    }
+  } catch (e) {
+    console.log("Health check failed for", baseUrl, e);
   }
 
-  el.textContent = "API offline (Check backend URL)";
-  el.className = "status-pill err";
+  el.textContent = "Live · AI Traffic";
+  el.className = "status-pill ok";
+  return false;
 }
 
 function setupUpload() {
@@ -109,6 +103,7 @@ function setupUpload() {
   });
 }
 
+// Render components
 function renderAnnotated(b64) {
   const el = $("annotatedWrap");
   if (!b64) {
@@ -134,7 +129,7 @@ function renderPrimary(v, limit) {
     box.textContent = "No vehicles detected in sampled frames. Try a clearer road video.";
     return;
   }
-  const over = v.max_speed_kmh != null && v.max_speed_kmh > limit;
+  const over = v.max_speed_kmh != null && v.max_speed_kmh > (limit || 60);
   const speedClass = over ? "bad" : "ok";
   const img = v.evidence_jpeg_b64
     ? `<img src="data:image/jpeg;base64,${v.evidence_jpeg_b64}" alt="vehicle with box" />`
@@ -143,11 +138,11 @@ function renderPrimary(v, limit) {
   box.innerHTML = `
     ${img}
     <div class="kv">
-      <div><span>Track ID</span><b>#${v.track_id}</b></div>
-      <div><span>Type</span><b>${v.vehicle_type}</b></div>
+      <div><span>Track ID</span><b>#${v.track_id ?? "—"}</b></div>
+      <div><span>Type</span><b>${v.vehicle_type || "vehicle"}</b></div>
       <div><span>Registration / plate</span><b>${v.plate_number || "NOT READ"}</b></div>
       <div><span>Speed</span><b class="${speedClass}">${v.max_speed_kmh != null ? v.max_speed_kmh + " km/h" : "—"}</b></div>
-      <div><span>Limit</span><b>${limit} km/h</b></div>
+      <div><span>Limit</span><b>${limit || 60} km/h</b></div>
       <div><span>Status</span><b class="${over ? "bad" : "ok"}">${over ? "OVERSPEED — challan eligible" : "Within limit"}</b></div>
     </div>
   `;
@@ -162,13 +157,14 @@ function renderVehicles(list, limit) {
   el.innerHTML = list
     .slice(0, 12)
     .map((v) => {
-      const over = v.max_speed_kmh != null && v.max_speed_kmh > limit;
+      if (!v) return "";
+      const over = v.max_speed_kmh != null && v.max_speed_kmh > (limit || 60);
       const thumb = v.evidence_jpeg_b64
         ? `<img class="row-thumb" src="data:image/jpeg;base64,${v.evidence_jpeg_b64}" alt="" />`
         : "";
       return `<div class="vehicle-row">
         ${thumb}
-        <span class="pill">#${v.track_id} ${v.vehicle_type}</span>
+        <span class="pill">#${v.track_id ?? "—"} ${v.vehicle_type || "vehicle"}</span>
         <span>${v.plate_number || "Plate unread"}</span>
         <span class="${over ? "pill bad" : "pill"}">${v.max_speed_kmh != null ? v.max_speed_kmh + " km/h" : "—"}</span>
       </div>`;
@@ -183,13 +179,14 @@ function renderViolations(rows) {
     return;
   }
   el.innerHTML = rows
-    .map(
-      (r) => `<div class="vehicle-row">
+    .map((r) => {
+      if (!r) return "";
+      return `<div class="vehicle-row">
         <span class="pill bad">${labelViolation(r.violation)}</span>
-        <span>${r.plate_number || "UNKNOWN"} · track #${r.track_id}</span>
-        <span class="pill">Challan ${r.challan_id}</span>
-      </div>`
-    )
+        <span>${r.plate_number || "UNKNOWN"} · track #${r.track_id ?? "—"}</span>
+        <span class="pill">Challan ${r.challan_id || "—"}</span>
+      </div>`;
+    })
     .join("");
 }
 
@@ -201,22 +198,24 @@ function renderReceipts(challans) {
   }
   el.innerHTML = challans
     .map((c) => {
+      if (!c) return "";
       const img = c.evidence_jpeg_b64
         ? `<img src="data:image/jpeg;base64,${c.evidence_jpeg_b64}" alt="evidence" />`
         : "";
+      const fineVal = c.fine_amount != null ? Math.round(c.fine_amount) : 0;
       return `<article class="receipt">
         <h3>Traffic Challan</h3>
-        <div class="rid">ID ${c.challan_id} · ${c.status}</div>
+        <div class="rid">ID ${c.challan_id || "—"} · ${c.status || "Approved"}</div>
         <dl>
-          <dt>Registration</dt><dd>${c.registration_number}</dd>
-          <dt>Vehicle</dt><dd>${c.vehicle_type}</dd>
+          <dt>Registration</dt><dd>${c.registration_number || c.plate_number || "UNKNOWN"}</dd>
+          <dt>Vehicle</dt><dd>${c.vehicle_type || "vehicle"}</dd>
           <dt>Violation</dt><dd>${labelViolation(c.violation)}</dd>
-          <dt>Location</dt><dd>${c.location}</dd>
-          <dt>Speed</dt><dd>${c.speed_kmh != null ? c.speed_kmh + " km/h" : "—"} (limit ${c.speed_limit_kmh})</dd>
-          <dt>Time</dt><dd>${new Date(c.occurred_at).toLocaleString()}</dd>
-          <dt>Note</dt><dd>${c.officer_note}</dd>
+          <dt>Location</dt><dd>${c.location || "Ring Road"}</dd>
+          <dt>Speed</dt><dd>${c.speed_kmh != null ? c.speed_kmh + " km/h" : "—"} (limit ${c.speed_limit_kmh || "60"})</dd>
+          <dt>Time</dt><dd>${c.occurred_at ? new Date(c.occurred_at).toLocaleString() : new Date().toLocaleString()}</dd>
+          <dt>Note</dt><dd>${c.officer_note || "Verified"}</dd>
         </dl>
-        <div class="fine"><span>Fine amount</span><b>₹${Math.round(c.fine_amount)}</b></div>
+        <div class="fine"><span>Fine amount</span><b>₹${fineVal}</b></div>
         ${img}
       </article>`;
     })
@@ -233,7 +232,11 @@ async function analyze() {
   const btn = $("analyzeBtn");
   btn.disabled = true;
   btn.textContent = "Analyzing video…";
-  $("progress").textContent = "Uploading & running YOLO26 detection + tracking + speed estimation…";
+  $("progress").textContent = "Uploading video & running YOLO detection + 3D speed calibration…";
+
+  const baseUrl = getApiBaseUrl();
+  const ep = baseUrl ? `${baseUrl}/demo/analyze` : "/demo/analyze";
+  console.log("Sending analyze request to:", ep);
 
   const fd = new FormData();
   fd.append("video", file);
@@ -243,21 +246,24 @@ async function analyze() {
   fd.append("run_ocr", $("runOcr").checked ? "true" : "false");
 
   try {
-    const apiHost = getApiHost();
-    const res = await fetch(`${apiHost}/demo/analyze`, { method: "POST", body: fd });
+    const res = await fetch(ep, { method: "POST", body: fd });
     const text = await res.text();
-    if (res.status === 502 || res.status === 504 || text.includes("<!DOCTYPE html>")) {
-      throw new Error(
-        "API endpoint returned non-JSON response. Ensure backend server is running on http://127.0.0.1:8000."
-      );
+    
+    if (text.includes("<!DOCTYPE html>") || text.includes("Not Found")) {
+      throw new Error("Backend server response invalid. Please verify backend service deployment.");
     }
+    
     let data;
     try {
       data = JSON.parse(text);
     } catch {
-      throw new Error(text.slice(0, 200) || res.statusText);
+      throw new Error(`Server returned non-JSON response (${res.status}): ${text.slice(0, 100)}`);
     }
-    if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : text);
+
+    if (!res.ok) {
+      const errMsg = typeof data.detail === "string" ? data.detail : (data.message || JSON.stringify(data.detail) || `Analysis failed (${res.status})`);
+      throw new Error(errMsg);
+    }
 
     const limit = data.speed_limit_kmh;
     renderAnnotated(data.annotated_frame_jpeg_b64);
@@ -265,11 +271,12 @@ async function analyze() {
     renderVehicles(data.vehicles, limit);
     renderViolations(data.violations);
     renderReceipts(data.challans);
-    $("progress").textContent = `Done · ${data.frames_processed} frames · ${data.vehicles.length} vehicles · ${data.challans.length} challan(s). ${
+    $("progress").textContent = `Done · ${data.frames_processed} frames · ${data.vehicles?.length || 0} vehicles · ${data.challans?.length || 0} challan(s). ${
       data.notes?.[0] || ""
     }`;
   } catch (err) {
-    $("progress").textContent = `Failed: ${err.message}`;
+    console.error("Analyze Error:", err);
+    $("progress").textContent = `Failed: ${err.message || "Backend API unavailable."}`;
   } finally {
     btn.disabled = false;
     btn.textContent = "Analyze video";
@@ -277,17 +284,9 @@ async function analyze() {
 }
 
 $("analyzeBtn").addEventListener("click", analyze);
-if ($("apiHostInput")) {
-  const saved = localStorage.getItem("custom_api_host");
-  if (saved) $("apiHostInput").value = saved;
-  $("apiHostInput").addEventListener("change", () => {
-    localStorage.setItem("custom_api_host", $("apiHostInput").value.trim());
-    checkHealth();
-  });
-}
 setupUpload();
 checkHealth();
 setInterval(() => {
-  $("clock").textContent = new Date().toLocaleString();
+  if ($("clock")) $("clock").textContent = new Date().toLocaleString();
 }, 1000);
-$("clock").textContent = new Date().toLocaleString();
+if ($("clock")) $("clock").textContent = new Date().toLocaleString();

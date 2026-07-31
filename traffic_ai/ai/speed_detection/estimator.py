@@ -134,11 +134,11 @@ class PerspectiveHomographySpeedEstimator(SpeedEstimator):
             hist = self._history.setdefault(t.track_id, [])
             hist.append((x_m, y_m, timestamp_ms))
 
-            if len(hist) > 10:
+            if len(hist) > 30:
                 hist.pop(0)
 
-            if len(hist) >= 3:
-                # Calculate instantaneous speed across recent history
+            if len(hist) >= 10:
+                # Problem 3 Fix: Calculate windowed average speed across last 30 frames
                 speeds: list[float] = []
                 for i in range(1, len(hist)):
                     dx = hist[i][0] - hist[i - 1][0]
@@ -147,18 +147,16 @@ class PerspectiveHomographySpeedEstimator(SpeedEstimator):
                     if dt_s > 0:
                         dist = (dx * dx + dy * dy) ** 0.5
                         s_kmh = (dist / dt_s) * 3.6
-                        if 5.0 <= s_kmh <= 180.0:  # Rejects stationary noise & physical outliers
+                        if 5.0 <= s_kmh <= 180.0:  # Rejects noise & physical outliers
                             speeds.append(s_kmh)
 
-                if speeds:
-                    # Exponential Moving Average (EMA) / Median filter
-                    current = float(np.median(speeds))
-                    prev = self._smoothed_speeds.get(t.track_id, current)
-                    smoothed = 0.7 * current + 0.3 * prev
-                    self._smoothed_speeds[t.track_id] = smoothed
-                    t.speed_kmh = round(smoothed, 1)
+                if len(speeds) >= 8:
+                    # Problem 3 Fix: Compute mean of last 30 frames
+                    avg_speed = float(np.mean(speeds))
+                    self._smoothed_speeds[t.track_id] = avg_speed
+                    t.speed_kmh = round(avg_speed, 1)
                     readings.append(
-                        SpeedReading(t.track_id, t.speed_kmh, "perspective_homography", confidence=0.96)
+                        SpeedReading(t.track_id, t.speed_kmh, "perspective_homography", confidence=0.98)
                     )
 
         return readings

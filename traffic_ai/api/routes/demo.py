@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from loguru import logger
 from pydantic import BaseModel, Field
 
 from traffic_ai.ai.demo_analyzer import DemoVideoAnalyzer
@@ -71,13 +72,13 @@ async def analyze_traffic_video(
         raise HTTPException(400, "Upload a video file (mp4, avi, mov, mkv, webm)")
 
     # Render Free: keep analysis short to avoid 502 timeout / OOM
-    max_frames = max(8, min(int(max_frames), 30))
+    max_frames = max(6, min(int(max_frames), 16))
     ocr_enabled = str(run_ocr).lower() in {"1", "true", "yes", "on"}
 
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
     tmp_path = Path(tmp.name)
     size = 0
-    max_bytes = 1024 * 1024 * 1024
+    max_bytes = 100 * 1024 * 1024
     try:
         while True:
             chunk = await video.read(1024 * 1024)
@@ -85,7 +86,7 @@ async def analyze_traffic_video(
                 break
             size += len(chunk)
             if size > max_bytes:
-                raise HTTPException(400, "Video too large (max 1 GB)")
+                raise HTTPException(400, "Video too large for free cloud tier (max 100 MB)")
             tmp.write(chunk)
         tmp.close()
         if size == 0:
@@ -109,6 +110,7 @@ async def analyze_traffic_video(
             "Server out of memory. Use a shorter video and keep OCR off on Free tier.",
         ) from exc
     except Exception as exc:
+        logger.exception("Traffic video analysis failed: {}", exc)
         raise HTTPException(500, f"Analysis failed: {exc}") from exc
     finally:
         try:

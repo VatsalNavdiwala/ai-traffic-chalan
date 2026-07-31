@@ -52,17 +52,14 @@ class VehicleDetector:
             from ultralytics import YOLO
 
             path = Path(self.model_path)
-            model_target = str(path) if path.exists() else "yolo26x.pt"
+            model_target = str(path) if path.exists() else "yolo11n.pt"
             try:
                 self._model = YOLO(model_target)
                 self._using_custom_weights = path.exists()
                 logger.info("Loaded YOLO model: {}", model_target)
             except Exception as e:
-                logger.warning("Could not load {}, trying yolo26n.pt/yolo11n.pt: {}", model_target, e)
-                try:
-                    self._model = YOLO("yolo26n.pt")
-                except Exception:
-                    self._model = YOLO("yolo11n.pt")
+                logger.warning("Could not load {}, trying yolo11n.pt: {}", model_target, e)
+                self._model = YOLO("yolo11n.pt")
                 self._using_custom_weights = False
 
             self._class_map = self._load_class_map()
@@ -132,20 +129,20 @@ class VehicleDetector:
             x1, y1, x2, y2 = box.xyxy[0].tolist()
 
             # Prefer custom traffic mapping; else COCO traffic subset; else YOLO name
-            class_name = (
+            raw_name = (
                 self._class_map.get(cls_id)
                 or COCO_TO_TRAFFIC.get(cls_id)
                 or names.get(cls_id, f"class_{cls_id}")
             )
-            if class_name not in {
-                "car",
-                "bike",
-                "truck",
-                "bus",
-                "auto",
-                "emergency_vehicle",
-                "bicycle",
-            } and cls_id not in COCO_TO_TRAFFIC:
+            raw_name = str(raw_name).lower()
+            if raw_name in {"motorcycle", "motorbike"}:
+                class_name = "bike"
+            elif raw_name in {"automobile", "sedan", "suv", "vehicle"}:
+                class_name = "car"
+            else:
+                class_name = raw_name
+
+            if class_name not in {"car", "bike", "truck", "bus", "auto", "bicycle", "van"}:
                 continue
 
             detections.append(
