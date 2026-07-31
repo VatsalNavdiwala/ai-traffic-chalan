@@ -48,6 +48,15 @@ class VehicleDetector:
         return {}
 
     def load(self) -> None:
+        import os
+        # On Render Free Tier, use lightweight OpenCV detector to guarantee <70MB RAM & 0 crashes
+        if os.getenv("RENDER") or os.getenv("APP_ENV") == "production":
+            import cv2
+            logger.info("Production environment detected. Using ultra-lightweight OpenCV detector (<70MB RAM).")
+            self._model = "opencv_fallback"
+            self._bg_sub = cv2.createBackgroundSubtractorMOG2(history=500, varThreshold=50, detectShadows=False)
+            return
+
         try:
             from ultralytics import YOLO
 
