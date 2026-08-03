@@ -1,7 +1,7 @@
 const $ = (id) => document.getElementById(id);
 
 // Configured Live Production Backend API URL
-const DEFAULT_LIVE_API_URL = window.TRAFFIC_AI_API_URL || "https://ai-traffic-chalan.onrender.com";
+const DEFAULT_LIVE_API_URL = window.TRAFFIC_AI_API_URL || "";
 
 const VIOLATION_LABELS = {
   overspeed: "Over speed",
