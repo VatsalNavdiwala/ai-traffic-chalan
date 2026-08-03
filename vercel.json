@@ -1,11 +1,9 @@
 {
-  "version": 2,
-  "public": true,
   "cleanUrls": true,
-  "routes": [
+  "rewrites": [
     {
-      "src": "/(.*)",
-      "dest": "/traffic_ai/dashboard/$1"
+      "source": "/(.*)",
+      "destination": "/traffic_ai/dashboard/$1"
     }
   ]
 }
