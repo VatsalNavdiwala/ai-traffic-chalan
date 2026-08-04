@@ -35,10 +35,15 @@ def create_app() -> FastAPI:
     app.include_router(signal.router)
     app.include_router(demo.router)
 
+    app.include_router(health.router, prefix="/api")
+    app.include_router(signal.router, prefix="/api")
+    app.include_router(demo.router, prefix="/api")
+
     try:
         from traffic_ai.api.routes import ops
 
         app.include_router(ops.router)
+        app.include_router(ops.router, prefix="/api")
     except Exception:
         pass
 

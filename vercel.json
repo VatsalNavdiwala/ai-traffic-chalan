@@ -6,15 +6,15 @@
       "destination": "/api/index.py"
     },
     {
-      "source": "/signal/(.*)",
+      "source": "/signal/:path*",
       "destination": "/api/index.py"
     },
     {
-      "source": "/demo/(.*)",
+      "source": "/demo/:path*",
       "destination": "/api/index.py"
     },
     {
-      "source": "/ops/(.*)",
+      "source": "/ops/:path*",
       "destination": "/api/index.py"
     },
     {
@@ -30,8 +30,12 @@
       "destination": "/api/index.py"
     },
     {
-      "source": "/(.*)",
-      "destination": "/traffic_ai/dashboard/$1"
+      "source": "/api/:path*",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/:path*",
+      "destination": "/traffic_ai/dashboard/:path*"
     }
   ]
 }
