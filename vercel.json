@@ -1,9 +1,27 @@
 {
-  "cleanUrls": true,
-  "rewrites": [
+  "version": 2,
+  "builds": [
     {
-      "source": "/(.*)",
-      "destination": "/traffic_ai/dashboard/$1"
+      "src": "api/index.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "traffic_ai/dashboard/**",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(health|signal/.*|demo/.*|ops/.*|docs|redoc|openapi.json)",
+      "dest": "api/index.py"
+    },
+    {
+      "src": "/static/(.*)",
+      "dest": "/traffic_ai/dashboard/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/traffic_ai/dashboard/$1"
     }
   ]
 }

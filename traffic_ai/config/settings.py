@@ -48,7 +48,11 @@ class Settings(BaseSettings):
     whatsapp_api_url: str = ""
     whatsapp_api_key: str = ""
 
-    evidence_dir: str = str(ROOT_DIR / "traffic_ai" / "logs" / "evidence")
+    evidence_dir: str = str(
+        Path("/tmp/traffic_ai/logs/evidence")
+        if __import__("os").getenv("VERCEL")
+        else (ROOT_DIR / "traffic_ai" / "logs" / "evidence")
+    )
 
 
 @lru_cache

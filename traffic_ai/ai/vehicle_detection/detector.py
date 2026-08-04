@@ -49,10 +49,10 @@ class VehicleDetector:
 
     def load(self) -> None:
         import os
-        # On Render Free Tier, use lightweight OpenCV detector to guarantee <70MB RAM & 0 crashes
-        if os.getenv("RENDER") or os.getenv("APP_ENV") == "production":
+        # On Vercel / Cloud Serverless, use lightweight OpenCV detector to guarantee fast execution & 0 crashes
+        if os.getenv("VERCEL") or os.getenv("RENDER") or os.getenv("APP_ENV") == "production":
             import cv2
-            logger.info("Production environment detected. Using ultra-lightweight OpenCV detector (<70MB RAM).")
+            logger.info("Vercel / Cloud Serverless environment detected. Using ultra-lightweight OpenCV detector (<70MB RAM).")
             self._model = "opencv_fallback"
             self._bg_sub = cv2.createBackgroundSubtractorMOG2(history=500, varThreshold=50, detectShadows=False)
             return

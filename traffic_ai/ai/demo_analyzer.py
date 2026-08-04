@@ -215,7 +215,7 @@ class DemoVideoAnalyzer:
                 continue
 
             h, w = frame.shape[:2]
-            # Downscale large frames to fit Render Free RAM / CPU
+            # Downscale large frames to fit Vercel Serverless RAM / CPU memory limits
             max_side = 384
             if max(h, w) > max_side:
                 scale = max_side / float(max(h, w))

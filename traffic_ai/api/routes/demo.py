@@ -71,7 +71,7 @@ async def analyze_traffic_video(
     if suffix not in {".mp4", ".avi", ".mov", ".mkv", ".webm"}:
         raise HTTPException(400, "Upload a video file (mp4, avi, mov, mkv, webm)")
 
-    # Render Free: keep analysis short to avoid 502 timeout / OOM (8 frames max)
+    # Vercel / Serverless: keep analysis short to avoid execution timeout / OOM (8 frames max)
     max_frames = max(4, min(int(max_frames), 8))
     ocr_enabled = str(run_ocr).lower() in {"1", "true", "yes", "on"}
 

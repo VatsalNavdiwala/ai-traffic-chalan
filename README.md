@@ -66,3 +66,27 @@ curl -X POST http://localhost:8000/challans/preview ^
 ## Hardware
 
 Industrial fixed CCTV, NVIDIA GPU server, optional radar/LiDAR, traffic controller interface, UPS.
+
+## Deployment to Vercel
+
+This repository is configured for one-click unified deployment on **Vercel** (serving both the FastAPI Python Backend Serverless Functions and the Live Dashboard frontend).
+
+### Option 1: Vercel CLI Deployment
+```bash
+# 1. Install Vercel CLI
+npm install -g vercel
+
+# 2. Login to Vercel
+vercel login
+
+# 3. Deploy to production
+vercel --prod
+```
+
+### Option 2: Vercel Dashboard (Git Integration)
+1. Push your repository to GitHub / GitLab / Bitbucket.
+2. Import the project in [Vercel Dashboard](https://vercel.com/new).
+3. Vercel will automatically detect `vercel.json` and deploy:
+   - **Python API Serverless Function**: `api/index.py` (`@vercel/python`)
+   - **Static Dashboard**: `traffic_ai/dashboard` (`@vercel/static`)
+

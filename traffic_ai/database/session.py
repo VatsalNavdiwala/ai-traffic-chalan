@@ -10,15 +10,23 @@ from traffic_ai.database.models import Base
 settings = get_settings()
 
 
+import os
+
+def _get_sqlite_path() -> str:
+    if os.getenv("VERCEL"):
+        return "/tmp/traffic_ai_demo.db"
+    return "./traffic_ai_demo.db"
+
+
 def _async_url() -> str:
     url = settings.database_url
-    # Prefer SQLite on hosts without Postgres (e.g. Render Free demo)
+    # Prefer SQLite on hosts without Postgres (e.g. Vercel Serverless / Cloud demo)
     try:
         import asyncpg  # noqa: F401
 
         return url
     except ImportError:
-        return "sqlite+aiosqlite:///./traffic_ai_demo.db"
+        return f"sqlite+aiosqlite:///{_get_sqlite_path()}"
 
 
 def _sync_url() -> str:
@@ -27,7 +35,7 @@ def _sync_url() -> str:
 
         return settings.database_url_sync
     except ImportError:
-        return "sqlite:///./traffic_ai_demo.db"
+        return f"sqlite:///{_get_sqlite_path()}"
 
 
 engine = create_async_engine(_async_url(), echo=settings.debug, pool_pre_ping=True)
