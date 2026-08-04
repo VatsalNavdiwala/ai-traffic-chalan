@@ -60,6 +60,9 @@ class DemoAnalyzeResponse(BaseModel):
 
 
 @router.post("/analyze", response_model=DemoAnalyzeResponse)
+@router.post("/demo/analyze", response_model=DemoAnalyzeResponse)
+@router.post("/", response_model=DemoAnalyzeResponse)
+@router.post("", response_model=DemoAnalyzeResponse)
 async def analyze_traffic_video(
     video: UploadFile = File(..., description="Traffic road video (mp4/avi/mov)"),
     location: str = Form("Ring Road"),

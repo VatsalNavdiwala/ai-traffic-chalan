@@ -6,6 +6,10 @@
       "destination": "/api/health.py"
     },
     {
+      "source": "/demo/analyze",
+      "destination": "/api/demo.py"
+    },
+    {
       "source": "/demo/(.*)",
       "destination": "/api/demo.py"
     },
