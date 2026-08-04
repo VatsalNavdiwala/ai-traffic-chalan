@@ -7,31 +7,19 @@
     },
     {
       "source": "/demo/analyze",
-      "destination": "/api/health.py"
+      "destination": "/api/demo/analyze.py"
     },
     {
-      "source": "/demo/(.*)",
-      "destination": "/api/health.py"
+      "source": "/signal/decide",
+      "destination": "/api/signal/decide.py"
     },
     {
-      "source": "/signal/(.*)",
-      "destination": "/api/health.py"
+      "source": "/signal/preview",
+      "destination": "/api/signal/preview.py"
     },
     {
-      "source": "/ops/(.*)",
-      "destination": "/api/health.py"
-    },
-    {
-      "source": "/docs",
-      "destination": "/api/health.py"
-    },
-    {
-      "source": "/redoc",
-      "destination": "/api/health.py"
-    },
-    {
-      "source": "/openapi.json",
-      "destination": "/api/health.py"
+      "source": "/ops/logs",
+      "destination": "/api/ops/logs.py"
     },
     {
       "source": "/static/(.*)",
