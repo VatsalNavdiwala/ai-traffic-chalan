@@ -3,39 +3,39 @@
   "rewrites": [
     {
       "source": "/health",
-      "destination": "/api/index.py?__path=/health"
+      "destination": "/api?__path=/health"
     },
     {
       "source": "/demo/analyze",
-      "destination": "/api/index.py?__path=/demo/analyze"
+      "destination": "/api?__path=/demo/analyze"
     },
     {
       "source": "/demo/(.*)",
-      "destination": "/api/index.py?__path=/demo/$1"
+      "destination": "/api?__path=/demo/$1"
     },
     {
       "source": "/signal/(.*)",
-      "destination": "/api/index.py?__path=/signal/$1"
+      "destination": "/api?__path=/signal/$1"
     },
     {
       "source": "/ops/(.*)",
-      "destination": "/api/index.py?__path=/ops/$1"
+      "destination": "/api?__path=/ops/$1"
     },
     {
       "source": "/docs",
-      "destination": "/api/index.py?__path=/docs"
+      "destination": "/api?__path=/docs"
     },
     {
       "source": "/redoc",
-      "destination": "/api/index.py?__path=/redoc"
+      "destination": "/api?__path=/redoc"
     },
     {
       "source": "/openapi.json",
-      "destination": "/api/index.py?__path=/openapi.json"
+      "destination": "/api?__path=/openapi.json"
     },
     {
       "source": "/api/(.*)",
-      "destination": "/api/index.py?__path=/$1"
+      "destination": "/api?__path=/$1"
     },
     {
       "source": "/static/(.*)",
