@@ -1,28 +1,16 @@
-# Core AI (Lightweight Serverless)
-# torch and ultralytics are heavy (>800MB) for serverless; OpenCV fallback is used in production
-# torch>=2.1.0
-# ultralytics>=8.3.0
+# Serverless-optimized dependencies for Vercel deployment (<70MB bundle size)
 opencv-python-headless>=4.9.0
-numpy>=1.26.0
+numpy>=1.26.0,<2.0.0
 pillow>=10.2.0
-supervision>=0.25.0
-
-# Backend
 fastapi>=0.115.0
-uvicorn[standard]>=0.32.0
+uvicorn>=0.32.0
 pydantic>=2.9.0
 pydantic-settings>=2.6.0
 sqlalchemy>=2.0.36
-asyncpg>=0.30.0
-psycopg2-binary>=2.9.9
-alembic>=1.14.0
 python-multipart>=0.0.12
 httpx>=0.28.0
 aiosqlite>=0.20.0
-
-# Utils
 pyyaml>=6.0.2
 python-dotenv>=1.0.1
 loguru>=0.7.3
 orjson>=3.10.0
-shapely>=2.0.6
