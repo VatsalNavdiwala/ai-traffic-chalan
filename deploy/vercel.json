@@ -1,0 +1,33 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/health",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/demo/analyze",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/demo/(.*)",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/signal/(.*)",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/ops/(.*)",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/traffic_ai/dashboard/$1"
+    }
+  ]
+}
