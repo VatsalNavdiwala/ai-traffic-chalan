@@ -222,6 +222,81 @@ function renderReceipts(challans) {
     .join("");
 }
 
+async function prepareVideoForUpload(file) {
+  if (file.size <= 3.8 * 1024 * 1024) {
+    return file;
+  }
+
+  $("progress").textContent = "Large video clip detected (>3.8MB). Downsampling for cloud serverless upload…";
+
+  return new Promise((resolve) => {
+    try {
+      const video = document.createElement("video");
+      video.src = URL.createObjectURL(file);
+      video.muted = true;
+      video.playsInline = true;
+
+      video.onloadedmetadata = () => {
+        const canvas = document.createElement("canvas");
+        const aspect = (video.videoWidth || 640) / (video.videoHeight || 360);
+        canvas.width = 640;
+        canvas.height = Math.round(640 / Math.max(0.5, aspect));
+        const ctx = canvas.getContext("2d");
+
+        let mimeType = "video/webm";
+        if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("video/mp4")) {
+          mimeType = "video/mp4";
+        } else if (typeof MediaRecorder !== "undefined" && !MediaRecorder.isTypeSupported("video/webm")) {
+          mimeType = "";
+        }
+
+        if (typeof MediaRecorder === "undefined" || !mimeType) {
+          resolve(file);
+          return;
+        }
+
+        const stream = canvas.captureStream(12);
+        const recorder = new MediaRecorder(stream, {
+          mimeType: mimeType,
+          videoBitsPerSecond: 600000
+        });
+
+        const chunks = [];
+        recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+        recorder.onstop = () => {
+          const blob = new Blob(chunks, { type: mimeType });
+          const compressed = new File([blob], "clip_" + (file.name || "video.webm"), { type: mimeType });
+          resolve(compressed);
+        };
+
+        recorder.start();
+        video.play();
+
+        const draw = () => {
+          if (!video.paused && !video.ended) {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            requestAnimationFrame(draw);
+          } else {
+            if (recorder.state === "recording") recorder.stop();
+          }
+        };
+        draw();
+
+        setTimeout(() => {
+          if (recorder.state === "recording") {
+            video.pause();
+            recorder.stop();
+          }
+        }, Math.min((video.duration || 8) * 1000, 12000));
+      };
+
+      video.onerror = () => resolve(file);
+    } catch (e) {
+      resolve(file);
+    }
+  });
+}
+
 async function analyze() {
   const file = $("videoFile").files?.[0];
   if (!file) {
@@ -232,17 +307,19 @@ async function analyze() {
   const btn = $("analyzeBtn");
   btn.disabled = true;
   btn.textContent = "Analyzing video…";
-  $("progress").textContent = "Uploading video & running YOLO detection + 3D speed calibration…";
+  $("progress").textContent = "Preparing video & running YOLO detection + 3D speed calibration…";
+
+  const fileToUpload = await prepareVideoForUpload(file);
 
   const baseUrl = getApiBaseUrl();
   const ep = baseUrl ? `${baseUrl}/demo/analyze` : "/demo/analyze";
   console.log("Sending analyze request to:", ep);
 
   const fd = new FormData();
-  fd.append("video", file);
+  fd.append("video", fileToUpload);
   fd.append("location", $("location").value || "Ring Road");
   fd.append("speed_limit_kmh", $("speedLimit").value || "60");
-  fd.append("max_frames", "20");
+  fd.append("max_frames", "30");
   fd.append("run_ocr", $("runOcr").checked ? "true" : "false");
 
   try {
@@ -271,7 +348,7 @@ async function analyze() {
     renderVehicles(data.vehicles, limit);
     renderViolations(data.violations);
     renderReceipts(data.challans);
-    $("progress").textContent = `Done · ${data.frames_processed} frames · ${data.vehicles?.length || 0} vehicles · ${data.challans?.length || 0} challan(s). ${
+    $("progress").textContent = `Done · ${data.frames_processed} frames analyzed · ${data.vehicles?.length || 0} vehicles · ${data.challans?.length || 0} challan(s). ${
       data.notes?.[0] || ""
     }`;
   } catch (err) {

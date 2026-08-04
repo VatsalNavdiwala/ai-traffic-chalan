@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import tempfile
 from pathlib import Path
 
+import cv2
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -23,35 +25,31 @@ def get_analyzer() -> DemoVideoAnalyzer:
 
 
 class VehicleOut(BaseModel):
-    track_id: int
-    vehicle_type: str
-    plate_number: str | None = None
-    max_speed_kmh: float | None = None
-    frames_seen: int = 0
-    evidence_jpeg_b64: str | None = None
+    id: int
+    type: str
+    confidence: float
+    box: list[int]
+    speed_kmh: float | None = None
 
 
 class ChallanOut(BaseModel):
-    challan_id: str
-    plate_number: str
+    id: str
     registration_number: str
     vehicle_type: str
     violation: str
-    location: str
+    fine_amount: float
     speed_kmh: float | None = None
     speed_limit_kmh: float
-    fine_amount: float
-    status: str
+    location: str
     occurred_at: str
-    evidence_jpeg_b64: str | None = None
-    officer_note: str = "Pending officer verification (demo)"
+    officer_note: str
 
 
 class DemoAnalyzeResponse(BaseModel):
     location: str
     speed_limit_kmh: float
     frames_processed: int
-    vehicles: list[VehicleOut]
+    vehicles: list[VehicleOut] = Field(default_factory=list)
     primary_vehicle: VehicleOut | None = None
     violations: list[dict] = Field(default_factory=list)
     challans: list[ChallanOut] = Field(default_factory=list)
@@ -65,7 +63,7 @@ async def demo_analyze_info():
     return {
         "status": "ok",
         "endpoint": "/demo/analyze",
-        "message": "Send a POST request with video file upload (mp4/avi/mov) to analyze traffic video.",
+        "message": "Send a POST request with video file upload (mp4/avi/mov/webm) to analyze traffic video.",
     }
 
 
@@ -74,7 +72,7 @@ async def demo_analyze_info():
 @router.post("/", response_model=DemoAnalyzeResponse)
 @router.post("", response_model=DemoAnalyzeResponse)
 async def analyze_traffic_video(
-    video: UploadFile = File(..., description="Traffic road video (mp4/avi/mov)"),
+    video: UploadFile = File(..., description="Traffic road video (mp4/avi/mov/webm)"),
     location: str = Form("Ring Road"),
     speed_limit_kmh: float = Form(60.0),
     max_frames: int = Form(20),
@@ -84,8 +82,6 @@ async def analyze_traffic_video(
     if suffix not in {".mp4", ".avi", ".mov", ".mkv", ".webm"}:
         raise HTTPException(400, "Upload a video file (mp4, avi, mov, mkv, webm)")
 
-    # Vercel / Serverless: keep analysis short to avoid execution timeout / OOM (8 frames max)
-    max_frames = max(4, min(int(max_frames), 8))
     ocr_enabled = str(run_ocr).lower() in {"1", "true", "yes", "on"}
 
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
@@ -105,74 +101,55 @@ async def analyze_traffic_video(
         if size == 0:
             raise HTTPException(400, "Empty upload")
 
+        # Open video to get frame count and FPS
+        cap = cv2.VideoCapture(str(tmp_path))
+        fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+        total_video_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        cap.release()
+
+        duration_sec = total_video_frames / fps if (total_video_frames > 0 and fps > 0) else 5.0
+
+        # Calculate max frames dynamically according to video length
+        if os.getenv("VERCEL"):
+            computed_frames = int(duration_sec * 4)
+            max_frames_to_run = max(8, min(computed_frames, 30))
+        else:
+            computed_frames = int(duration_sec * 6)
+            max_frames_to_run = max(10, min(computed_frames, 60))
+
         analyzer = get_analyzer()
         result = await asyncio.to_thread(
             analyzer.analyze,
             str(tmp_path),
             location.strip() or "Ring Road",
             float(speed_limit_kmh),
-            max_frames,
+            max_frames_to_run,
             4,  # frame_stride
             ocr_enabled,
         )
     except HTTPException:
         raise
     except MemoryError as exc:
-        raise HTTPException(
-            503,
-            "Server out of memory. Use a shorter video and keep OCR off on Free tier.",
-        ) from exc
+        logger.error(f"Memory error during video analysis: {exc}")
+        raise HTTPException(500, "Video processing ran out of memory. Upload a smaller video clip.") from exc
     except Exception as exc:
-        logger.exception("Traffic video analysis failed: {}", exc)
-        raise HTTPException(500, f"Analysis failed: {exc}") from exc
+        logger.exception("Demo video processing error")
+        raise HTTPException(500, f"Analysis error: {exc}") from exc
     finally:
         try:
-            tmp.close()
-        except Exception:
-            pass
-        try:
-            tmp_path.unlink(missing_ok=True)
-        except Exception:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        except OSError:
             pass
 
-    def vehicle_out(v) -> VehicleOut | None:
-        if v is None:
-            return None
-        return VehicleOut(
-            track_id=v.track_id,
-            vehicle_type=v.vehicle_type,
-            plate_number=v.plate_number,
-            max_speed_kmh=v.max_speed_kmh,
-            frames_seen=v.frames_seen,
-            evidence_jpeg_b64=v.evidence_jpeg_b64,
-        )
-
-    vehicles = [vehicle_out(v) for v in result.vehicles]
     return DemoAnalyzeResponse(
-        location=result.location,
-        speed_limit_kmh=result.speed_limit_kmh,
-        frames_processed=result.frames_processed,
-        vehicles=[v for v in vehicles if v is not None],
-        primary_vehicle=vehicle_out(result.primary_vehicle),
-        violations=result.violations,
-        challans=[
-            ChallanOut(
-                challan_id=c.challan_id,
-                plate_number=c.plate_number,
-                registration_number=c.registration_number,
-                vehicle_type=c.vehicle_type,
-                violation=c.violation,
-                location=c.location,
-                speed_kmh=c.speed_kmh,
-                speed_limit_kmh=c.speed_limit_kmh,
-                fine_amount=c.fine_amount,
-                status=c.status,
-                occurred_at=c.occurred_at,
-                evidence_jpeg_b64=c.evidence_jpeg_b64,
-                officer_note=c.officer_note,
-            )
-            for c in result.challans
-        ],
-        notes=result.notes,
-        annotated_frame_jpeg_b64=result.annotated_frame_jpeg_b64,
+        location=result.get("location", location),
+        speed_limit_kmh=result.get("speed_limit_kmh", speed_limit_kmh),
+        frames_processed=result.get("frames_processed", 0),
+        vehicles=result.get("vehicles", []),
+        primary_vehicle=result.get("primary_vehicle"),
+        violations=result.get("violations", []),
+        challans=result.get("challans", []),
+        notes=result.get("notes", []),
+        annotated_frame_jpeg_b64=result.get("annotated_frame_jpeg_b64"),
     )
