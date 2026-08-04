@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import os
 import tempfile
 from pathlib import Path
@@ -101,18 +102,26 @@ async def analyze_traffic_video(
         if size == 0:
             raise HTTPException(400, "Empty upload")
 
-        # Open video to get frame count and FPS
-        cap = cv2.VideoCapture(str(tmp_path))
-        fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
-        total_video_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-        cap.release()
+        # Safely open video to get frame count and FPS
+        try:
+            cap = cv2.VideoCapture(str(tmp_path))
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            total_video_frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+            cap.release()
 
-        duration_sec = total_video_frames / fps if (total_video_frames > 0 and fps > 0) else 5.0
+            if not fps or math.isnan(fps) or fps <= 0:
+                fps = 25.0
+            if not total_video_frames or math.isnan(total_video_frames) or total_video_frames <= 0:
+                total_video_frames = 100
+
+            duration_sec = total_video_frames / fps
+        except Exception:
+            duration_sec = 5.0
 
         # Calculate max frames dynamically according to video length
         if os.getenv("VERCEL"):
             computed_frames = int(duration_sec * 4)
-            max_frames_to_run = max(8, min(computed_frames, 30))
+            max_frames_to_run = max(6, min(computed_frames, 24))
         else:
             computed_frames = int(duration_sec * 6)
             max_frames_to_run = max(10, min(computed_frames, 60))
