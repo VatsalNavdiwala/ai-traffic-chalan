@@ -151,14 +151,27 @@ async def analyze_traffic_video(
         except OSError:
             pass
 
-    return DemoAnalyzeResponse(
-        location=result.get("location", location),
-        speed_limit_kmh=result.get("speed_limit_kmh", speed_limit_kmh),
-        frames_processed=result.get("frames_processed", 0),
-        vehicles=result.get("vehicles", []),
-        primary_vehicle=result.get("primary_vehicle"),
-        violations=result.get("violations", []),
-        challans=result.get("challans", []),
-        notes=result.get("notes", []),
-        annotated_frame_jpeg_b64=result.get("annotated_frame_jpeg_b64"),
-    )
+    if hasattr(result, "__dataclass_fields__"):
+        return DemoAnalyzeResponse(
+            location=getattr(result, "location", location),
+            speed_limit_kmh=getattr(result, "speed_limit_kmh", speed_limit_kmh),
+            frames_processed=getattr(result, "frames_processed", 0),
+            vehicles=getattr(result, "vehicles", []),
+            primary_vehicle=getattr(result, "primary_vehicle", None),
+            violations=getattr(result, "violations", []),
+            challans=getattr(result, "challans", []),
+            notes=getattr(result, "notes", []),
+            annotated_frame_jpeg_b64=getattr(result, "annotated_frame_jpeg_b64", None),
+        )
+    else:
+        return DemoAnalyzeResponse(
+            location=result.get("location", location),
+            speed_limit_kmh=result.get("speed_limit_kmh", speed_limit_kmh),
+            frames_processed=result.get("frames_processed", 0),
+            vehicles=result.get("vehicles", []),
+            primary_vehicle=result.get("primary_vehicle"),
+            violations=result.get("violations", []),
+            challans=result.get("challans", []),
+            notes=result.get("notes", []),
+            annotated_frame_jpeg_b64=result.get("annotated_frame_jpeg_b64"),
+        )
