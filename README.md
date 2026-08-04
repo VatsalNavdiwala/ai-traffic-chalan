@@ -2,6 +2,8 @@
 
 End-to-end traffic intelligence: vehicle detection → tracking → speed → signal AI → violations → OCR → challan.
 
+[![Vercel Deployment](https://img.shields.io/badge/Vercel-Deployed-success?style=flat&logo=vercel)](https://ai-traffic-chalan.vercel.app)
+
 ## Quick start
 
 ```bash
