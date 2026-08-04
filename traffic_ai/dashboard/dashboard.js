@@ -37,7 +37,7 @@ async function checkHealth() {
   const baseUrl = getApiBaseUrl();
 
   try {
-    const target = baseUrl ? `${baseUrl}/health` : "/health";
+    const target = baseUrl ? `${baseUrl}/health` : "/api/health";
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 6000);
 
@@ -235,7 +235,7 @@ async function analyze() {
   $("progress").textContent = "Uploading video & running YOLO detection + 3D speed calibration…";
 
   const baseUrl = getApiBaseUrl();
-  const ep = baseUrl ? `${baseUrl}/demo/analyze` : "/demo/analyze";
+  const ep = baseUrl ? `${baseUrl}/demo/analyze` : "/api/demo/analyze";
   console.log("Sending analyze request to:", ep);
 
   const fd = new FormData();

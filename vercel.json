@@ -1,48 +1,29 @@
 {
-  "routes": [
+  "cleanUrls": true,
+  "rewrites": [
     {
-      "src": "/health",
-      "dest": "/api/index.py"
+      "source": "/health",
+      "destination": "/api/health"
     },
     {
-      "src": "/demo/analyze",
-      "dest": "/api/index.py"
+      "source": "/demo/(.*)",
+      "destination": "/api/demo/$1"
     },
     {
-      "src": "/demo/(.*)",
-      "dest": "/api/index.py"
+      "source": "/signal/(.*)",
+      "destination": "/api/signal/$1"
     },
     {
-      "src": "/signal/(.*)",
-      "dest": "/api/index.py"
+      "source": "/ops/(.*)",
+      "destination": "/api/ops/$1"
     },
     {
-      "src": "/ops/(.*)",
-      "dest": "/api/index.py"
+      "source": "/static/(.*)",
+      "destination": "/traffic_ai/dashboard/$1"
     },
     {
-      "src": "/docs",
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "/redoc",
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "/openapi.json",
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "/static/(.*)",
-      "dest": "/traffic_ai/dashboard/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/traffic_ai/dashboard/$1"
+      "source": "/(.*)",
+      "destination": "/traffic_ai/dashboard/$1"
     }
   ]
 }
