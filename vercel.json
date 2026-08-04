@@ -3,23 +3,39 @@
   "rewrites": [
     {
       "source": "/health",
-      "destination": "/api/health.py"
+      "destination": "/api/index.py?__path=/health"
     },
     {
       "source": "/demo/analyze",
-      "destination": "/api/demo/analyze.py"
+      "destination": "/api/index.py?__path=/demo/analyze"
     },
     {
-      "source": "/signal/decide",
-      "destination": "/api/signal/decide.py"
+      "source": "/demo/(.*)",
+      "destination": "/api/index.py?__path=/demo/$1"
     },
     {
-      "source": "/signal/preview",
-      "destination": "/api/signal/preview.py"
+      "source": "/signal/(.*)",
+      "destination": "/api/index.py?__path=/signal/$1"
     },
     {
-      "source": "/ops/logs",
-      "destination": "/api/ops/logs.py"
+      "source": "/ops/(.*)",
+      "destination": "/api/index.py?__path=/ops/$1"
+    },
+    {
+      "source": "/docs",
+      "destination": "/api/index.py?__path=/docs"
+    },
+    {
+      "source": "/redoc",
+      "destination": "/api/index.py?__path=/redoc"
+    },
+    {
+      "source": "/openapi.json",
+      "destination": "/api/index.py?__path=/openapi.json"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.py?__path=/$1"
     },
     {
       "source": "/static/(.*)",
