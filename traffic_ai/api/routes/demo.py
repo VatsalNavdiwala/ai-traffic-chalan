@@ -59,6 +59,16 @@ class DemoAnalyzeResponse(BaseModel):
     annotated_frame_jpeg_b64: str | None = None
 
 
+@router.get("/analyze")
+@router.get("/demo/analyze")
+async def demo_analyze_info():
+    return {
+        "status": "ok",
+        "endpoint": "/demo/analyze",
+        "message": "Send a POST request with video file upload (mp4/avi/mov) to analyze traffic video.",
+    }
+
+
 @router.post("/analyze", response_model=DemoAnalyzeResponse)
 @router.post("/demo/analyze", response_model=DemoAnalyzeResponse)
 @router.post("/", response_model=DemoAnalyzeResponse)
