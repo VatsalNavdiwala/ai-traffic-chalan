@@ -6,20 +6,24 @@
       "destination": "/api/health.py"
     },
     {
-      "source": "/demo/analyze",
-      "destination": "/api/demo/analyze.py"
+      "source": "/demo/(.*)",
+      "destination": "/api/demo.py"
     },
     {
-      "source": "/signal/decide",
-      "destination": "/api/signal/decide.py"
+      "source": "/signal/(.*)",
+      "destination": "/api/signal.py"
     },
     {
-      "source": "/signal/preview",
-      "destination": "/api/signal/preview.py"
+      "source": "/ops/(.*)",
+      "destination": "/api/ops.py"
     },
     {
-      "source": "/ops/logs",
-      "destination": "/api/ops/logs.py"
+      "source": "/docs",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/openapi.json",
+      "destination": "/api/index.py"
     },
     {
       "source": "/api/(.*)",
