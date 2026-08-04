@@ -137,8 +137,8 @@ class PerspectiveHomographySpeedEstimator(SpeedEstimator):
             if len(hist) > 30:
                 hist.pop(0)
 
-            if len(hist) >= 10:
-                # Problem 3 Fix: Calculate windowed average speed across last 30 frames
+            if len(hist) >= 2:
+                # Calculate windowed average speed across available frames
                 speeds: list[float] = []
                 for i in range(1, len(hist)):
                     dx = hist[i][0] - hist[i - 1][0]
@@ -147,11 +147,10 @@ class PerspectiveHomographySpeedEstimator(SpeedEstimator):
                     if dt_s > 0:
                         dist = (dx * dx + dy * dy) ** 0.5
                         s_kmh = (dist / dt_s) * 3.6
-                        if 5.0 <= s_kmh <= 180.0:  # Rejects noise & physical outliers
+                        if 1.0 <= s_kmh <= 200.0:  # Rejects noise & physical outliers
                             speeds.append(s_kmh)
 
-                if len(speeds) >= 8:
-                    # Problem 3 Fix: Compute mean of last 30 frames
+                if speeds:
                     avg_speed = float(np.mean(speeds))
                     self._smoothed_speeds[t.track_id] = avg_speed
                     t.speed_kmh = round(avg_speed, 1)
