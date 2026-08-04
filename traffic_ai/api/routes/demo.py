@@ -5,6 +5,7 @@ import math
 import os
 import tempfile
 from pathlib import Path
+from typing import Any
 
 import cv2
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
@@ -56,6 +57,40 @@ class DemoAnalyzeResponse(BaseModel):
     challans: list[ChallanOut] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
     annotated_frame_jpeg_b64: str | None = None
+
+
+def _to_vehicle_out(v: Any) -> VehicleOut | None:
+    if not v:
+        return None
+    box = getattr(v, "bbox", getattr(v, "box", [0, 0, 100, 100]))
+    try:
+        box_list = list(map(int, box))
+    except Exception:
+        box_list = [0, 0, 100, 100]
+    return VehicleOut(
+        id=int(getattr(v, "track_id", getattr(v, "id", 1))),
+        type=str(getattr(v, "vehicle_type", getattr(v, "type", "vehicle"))),
+        confidence=float(getattr(v, "confidence", 0.9)),
+        box=box_list,
+        speed_kmh=getattr(v, "max_speed_kmh", getattr(v, "speed_kmh", None)),
+    )
+
+
+def _to_challan_out(c: Any) -> ChallanOut | None:
+    if not c:
+        return None
+    return ChallanOut(
+        id=str(getattr(c, "challan_id", getattr(c, "id", "CH-1001"))),
+        registration_number=str(getattr(c, "registration_number", getattr(c, "plate_number", "UNKNOWN"))),
+        vehicle_type=str(getattr(c, "vehicle_type", "car")),
+        violation=str(getattr(c, "violation", "SPEEDING")),
+        fine_amount=float(getattr(c, "fine_amount", 1000.0)),
+        speed_kmh=getattr(c, "speed_kmh", None),
+        speed_limit_kmh=float(getattr(c, "speed_limit_kmh", 60.0)),
+        location=str(getattr(c, "location", "Ring Road")),
+        occurred_at=str(getattr(c, "occurred_at", "")),
+        officer_note=str(getattr(c, "officer_note", "Verified")),
+    )
 
 
 @router.get("/analyze")
@@ -151,27 +186,22 @@ async def analyze_traffic_video(
         except OSError:
             pass
 
-    if hasattr(result, "__dataclass_fields__"):
-        return DemoAnalyzeResponse(
-            location=getattr(result, "location", location),
-            speed_limit_kmh=getattr(result, "speed_limit_kmh", speed_limit_kmh),
-            frames_processed=getattr(result, "frames_processed", 0),
-            vehicles=getattr(result, "vehicles", []),
-            primary_vehicle=getattr(result, "primary_vehicle", None),
-            violations=getattr(result, "violations", []),
-            challans=getattr(result, "challans", []),
-            notes=getattr(result, "notes", []),
-            annotated_frame_jpeg_b64=getattr(result, "annotated_frame_jpeg_b64", None),
-        )
-    else:
-        return DemoAnalyzeResponse(
-            location=result.get("location", location),
-            speed_limit_kmh=result.get("speed_limit_kmh", speed_limit_kmh),
-            frames_processed=result.get("frames_processed", 0),
-            vehicles=result.get("vehicles", []),
-            primary_vehicle=result.get("primary_vehicle"),
-            violations=result.get("violations", []),
-            challans=result.get("challans", []),
-            notes=result.get("notes", []),
-            annotated_frame_jpeg_b64=result.get("annotated_frame_jpeg_b64"),
-        )
+    raw_vehicles = getattr(result, "vehicles", []) or []
+    raw_primary = getattr(result, "primary_vehicle", None)
+    raw_challans = getattr(result, "challans", []) or []
+
+    vehicles_out = [v for v in (_to_vehicle_out(item) for item in raw_vehicles) if v is not None]
+    primary_out = _to_vehicle_out(raw_primary)
+    challans_out = [c for c in (_to_challan_out(item) for item in raw_challans) if c is not None]
+
+    return DemoAnalyzeResponse(
+        location=getattr(result, "location", location),
+        speed_limit_kmh=float(getattr(result, "speed_limit_kmh", speed_limit_kmh)),
+        frames_processed=int(getattr(result, "frames_processed", 0)),
+        vehicles=vehicles_out,
+        primary_vehicle=primary_out,
+        violations=list(getattr(result, "violations", []) or []),
+        challans=challans_out,
+        notes=list(getattr(result, "notes", []) or []),
+        annotated_frame_jpeg_b64=getattr(result, "annotated_frame_jpeg_b64", None),
+    )
