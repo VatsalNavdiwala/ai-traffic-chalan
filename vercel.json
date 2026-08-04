@@ -1,49 +1,59 @@
 {
-  "cleanUrls": true,
-  "rewrites": [
+  "version": 2,
+  "builds": [
     {
-      "source": "/health",
-      "destination": "/api?__path=/health"
+      "src": "api/index.py",
+      "use": "@vercel/python"
     },
     {
-      "source": "/demo/analyze",
-      "destination": "/api?__path=/demo/analyze"
+      "src": "traffic_ai/dashboard/**",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/health",
+      "dest": "api/index.py"
     },
     {
-      "source": "/demo/(.*)",
-      "destination": "/api?__path=/demo/$1"
+      "src": "/demo/analyze",
+      "dest": "api/index.py"
     },
     {
-      "source": "/signal/(.*)",
-      "destination": "/api?__path=/signal/$1"
+      "src": "/demo/(.*)",
+      "dest": "api/index.py"
     },
     {
-      "source": "/ops/(.*)",
-      "destination": "/api?__path=/ops/$1"
+      "src": "/signal/(.*)",
+      "dest": "api/index.py"
     },
     {
-      "source": "/docs",
-      "destination": "/api?__path=/docs"
+      "src": "/ops/(.*)",
+      "dest": "api/index.py"
     },
     {
-      "source": "/redoc",
-      "destination": "/api?__path=/redoc"
+      "src": "/docs",
+      "dest": "api/index.py"
     },
     {
-      "source": "/openapi.json",
-      "destination": "/api?__path=/openapi.json"
+      "src": "/redoc",
+      "dest": "api/index.py"
     },
     {
-      "source": "/api/(.*)",
-      "destination": "/api?__path=/$1"
+      "src": "/openapi.json",
+      "dest": "api/index.py"
     },
     {
-      "source": "/static/(.*)",
-      "destination": "/traffic_ai/dashboard/$1"
+      "src": "/api/(.*)",
+      "dest": "api/index.py"
     },
     {
-      "source": "/(.*)",
-      "destination": "/traffic_ai/dashboard/$1"
+      "src": "/static/(.*)",
+      "dest": "/traffic_ai/dashboard/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/traffic_ai/dashboard/$1"
     }
   ]
 }
