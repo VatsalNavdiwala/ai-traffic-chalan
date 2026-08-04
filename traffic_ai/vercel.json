@@ -39,11 +39,11 @@
     },
     {
       "source": "/static/(.*)",
-      "destination": "/traffic_ai/dashboard/$1"
+      "destination": "/dashboard/$1"
     },
     {
       "source": "/(.*)",
-      "destination": "/traffic_ai/dashboard/$1"
+      "destination": "/dashboard/$1"
     }
   ]
 }

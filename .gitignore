@@ -16,3 +16,6 @@ traffic_ai/models/weights/**
 *.mp4
 *.avi
 .DS_Store
+
+.vercel
+.env*
